@@ -21,3 +21,9 @@ Thumbs.db
 *.log
 
 # auto-managed large files (>5MB)
+node_modules/.vite/deps/echarts-for-react.js.map
+node_modules/@esbuild/win32-x64/esbuild.exe
+node_modules/echarts/dist/echarts.esm.js.map
+node_modules/echarts/dist/echarts.esm.mjs.map
+node_modules/echarts/dist/echarts.js.map
+node_modules/lightningcss-win32-x64-msvc/lightningcss.win32-x64-msvc.node
