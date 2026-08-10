@@ -5,12 +5,82 @@
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 
+const errorListeners = new Set();
+
+export function subscribeApiErrors(listener) {
+  errorListeners.add(listener);
+  return () => errorListeners.delete(listener);
+}
+
+function emitApiError(err) {
+  for (const listener of errorListeners) {
+    try {
+      listener(err);
+    } catch {
+      /* ignore subscriber errors */
+    }
+  }
+}
+
+export class ApiError extends Error {
+  /**
+   * @param {{ kind: string, title: string, message: string, status?: number, detail?: string, path?: string }} opts
+   */
+  constructor({ kind, title, message, status, detail, path }) {
+    super(message);
+    this.name = "ApiError";
+    this.kind = kind;
+    this.title = title;
+    this.status = status ?? null;
+    this.detail = detail || "";
+    this.path = path || "";
+  }
+}
+
 function apiUrl(path) {
   const p = path.startsWith("/") ? path : `/${path}`;
   return API_BASE ? `${API_BASE}${p}` : p;
 }
 
-async function parseJson(response) {
+function httpTitle(status) {
+  if (status === 400) return "Request rejected";
+  if (status === 401 || status === 403) return "Not authorized";
+  if (status === 404) return "Not found";
+  if (status === 502 || status === 503) return "Upstream provider error";
+  if (status >= 500) return "Server error";
+  return "API error";
+}
+
+function toApiError(err, path) {
+  if (err instanceof ApiError) return err;
+  return new ApiError({
+    kind: "network",
+    title: "Cannot reach helix-api",
+    message: "API host unreachable — is the server running?",
+    detail: err instanceof Error ? err.message : String(err || "Failed to fetch"),
+    path,
+  });
+}
+
+/**
+ * @param {string} path
+ * @param {RequestInit & { silent?: boolean }} [options]
+ */
+async function apiFetch(path, options = {}) {
+  const { silent = false, ...fetchOpts } = options;
+  const url = apiUrl(path);
+  let response;
+  try {
+    response = await fetch(url, fetchOpts);
+  } catch (err) {
+    const apiErr = toApiError(err, path);
+    if (!silent) emitApiError(apiErr);
+    throw apiErr;
+  }
+  return response;
+}
+
+async function parseJson(response, path, { silent = false } = {}) {
   const text = await response.text();
   let data = null;
   if (text) {
@@ -21,7 +91,16 @@ async function parseJson(response) {
       trimmed.startsWith("<HTML") ||
       /<head>[\s\S]*<title>\s*404/i.test(trimmed);
     if (looksLikeHtml) {
-      throw new Error(`API error ${response.status}`);
+      const apiErr = new ApiError({
+        kind: "parse",
+        status: response.status,
+        title: "API misconfigured",
+        message: "Got HTML instead of JSON — check the API proxy or base URL.",
+        detail: `HTTP ${response.status}`,
+        path,
+      });
+      if (!silent) emitApiError(apiErr);
+      throw apiErr;
     }
     try {
       data = JSON.parse(text);
@@ -30,165 +109,272 @@ async function parseJson(response) {
     }
   }
   if (!response.ok) {
-    throw new Error(data?.error || `API error ${response.status}`);
+    const serverMsg =
+      (data && typeof data.error === "string" && data.error) ||
+      `API error ${response.status}`;
+    const kind =
+      response.status === 502 || response.status === 503 ? "server" : "http";
+    const apiErr = new ApiError({
+      kind,
+      status: response.status,
+      title: httpTitle(response.status),
+      message: serverMsg,
+      detail: `HTTP ${response.status}`,
+      path,
+    });
+    if (!silent) emitApiError(apiErr);
+    throw apiErr;
   }
   return data;
 }
 
+async function requestJson(path, options = {}) {
+  const { silent = false, ...fetchOpts } = options;
+  const response = await apiFetch(path, { ...fetchOpts, silent });
+  return parseJson(response, path, { silent });
+}
+
+export async function fetchHealth({ silent = false } = {}) {
+  return requestJson("/api/health/", { silent });
+}
+
 export async function fetchAgents() {
-  const res = await fetch(apiUrl("/api/agents/"));
-  const data = await parseJson(res);
+  const data = await requestJson("/api/agents/");
   return data.agents;
 }
 
-export async function saveAgentInstruction(agentId, instruction) {
-  const res = await fetch(apiUrl(`/api/agents/${agentId}/instruction/`), {
+export async function createAgent({ id, name, description = "", instruction = "" }) {
+  return requestJson("/api/agents/", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id, name, description, instruction }),
+  });
+}
+
+export async function deleteAgent(agentId) {
+  return requestJson(`/api/agents/${encodeURIComponent(agentId)}/`, {
+    method: "DELETE",
+  });
+}
+
+export async function renameAgent(agentId, name) {
+  return requestJson(`/api/agents/${encodeURIComponent(agentId)}/`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ instruction }),
+    body: JSON.stringify({ name }),
   });
-  return parseJson(res);
+}
+
+export async function updateAgentInstruction(agentId, instruction) {
+  return requestJson(
+    `/api/agents/${encodeURIComponent(agentId)}/instruction/`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ instruction }),
+    },
+  );
 }
 
 export async function fetchReferences() {
-  const res = await fetch(apiUrl("/api/references/"));
-  const data = await parseJson(res);
+  const data = await requestJson("/api/references/");
   return data.references;
 }
 
 export async function createReference(name, content = "") {
-  const res = await fetch(apiUrl("/api/references/"), {
+  return requestJson("/api/references/", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name, content }),
   });
-  return parseJson(res);
 }
 
 export async function updateReference(name, content) {
-  const res = await fetch(apiUrl(`/api/references/${encodeURIComponent(name)}/`), {
+  return requestJson(`/api/references/${encodeURIComponent(name)}/`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ content }),
   });
-  return parseJson(res);
 }
 
 export async function deleteReference(name) {
-  const res = await fetch(apiUrl(`/api/references/${encodeURIComponent(name)}/`), {
-    method: "DELETE",
-  });
+  const path = `/api/references/${encodeURIComponent(name)}/`;
+  const res = await apiFetch(path, { method: "DELETE" });
   if (!res.ok && res.status !== 204) {
-    await parseJson(res);
+    await parseJson(res, path);
   }
 }
 
 export async function fetchRules() {
-  const res = await fetch(apiUrl("/api/rules/"));
-  const data = await parseJson(res);
+  const data = await requestJson("/api/rules/");
   return data.rules;
 }
 
 export async function createRule(id, content = "", agents = []) {
-  const res = await fetch(apiUrl("/api/rules/"), {
+  return requestJson("/api/rules/", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ id, content, agents }),
   });
-  return parseJson(res);
 }
 
 export async function updateRule(id, { content, agents }) {
-  const res = await fetch(apiUrl(`/api/rules/${encodeURIComponent(id)}/`), {
+  return requestJson(`/api/rules/${encodeURIComponent(id)}/`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ content, agents }),
   });
-  return parseJson(res);
+}
+
+export async function renameRule(id, newId) {
+  return requestJson(`/api/rules/${encodeURIComponent(id)}/rename/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ new_id: newId }),
+  });
 }
 
 export async function deleteRule(id) {
-  const res = await fetch(apiUrl(`/api/rules/${encodeURIComponent(id)}/`), {
-    method: "DELETE",
-  });
+  const path = `/api/rules/${encodeURIComponent(id)}/`;
+  const res = await apiFetch(path, { method: "DELETE" });
   if (!res.ok && res.status !== 204) {
-    await parseJson(res);
+    await parseJson(res, path);
   }
 }
 
 export async function fetchSkills(scope) {
   const qs = scope ? `?scope=${encodeURIComponent(scope)}` : "";
-  const res = await fetch(apiUrl("/api/skills/") + qs);
-  const data = await parseJson(res);
+  const data = await requestJson(`/api/skills/${qs}`);
   return data.skills;
 }
 
 export async function createSkill(id, scope, content = "") {
-  const res = await fetch(apiUrl("/api/skills/"), {
+  return requestJson("/api/skills/", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ id, scope, content }),
   });
-  return parseJson(res);
 }
 
 export async function updateSkill(scope, id, content) {
-  const res = await fetch(
-    apiUrl(`/api/skills/${encodeURIComponent(scope)}/${encodeURIComponent(id)}/`),
+  return requestJson(
+    `/api/skills/${encodeURIComponent(scope)}/${encodeURIComponent(id)}/`,
     {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ content }),
     },
   );
-  return parseJson(res);
+}
+
+export async function renameSkill(scope, id, newId) {
+  return requestJson(
+    `/api/skills/${encodeURIComponent(scope)}/${encodeURIComponent(id)}/rename/`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ new_id: newId }),
+    },
+  );
 }
 
 export async function deleteSkill(scope, id) {
-  const res = await fetch(
-    apiUrl(`/api/skills/${encodeURIComponent(scope)}/${encodeURIComponent(id)}/`),
-    { method: "DELETE" },
-  );
+  const path = `/api/skills/${encodeURIComponent(scope)}/${encodeURIComponent(id)}/`;
+  const res = await apiFetch(path, { method: "DELETE" });
   if (!res.ok && res.status !== 204) {
-    await parseJson(res);
+    await parseJson(res, path);
   }
 }
 
 export async function saveRuleAssignments(assignments) {
-  const res = await fetch(apiUrl("/api/rules/assignments/"), {
+  return requestJson("/api/rules/assignments/", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ assignments }),
   });
-  return parseJson(res);
 }
 
 export async function fetchDatabaseSettings() {
-  const res = await fetch(apiUrl("/api/admin/database/"));
-  return parseJson(res);
+  return requestJson("/api/admin/database/");
 }
 
 export async function saveDatabaseSettings(database) {
-  const res = await fetch(apiUrl("/api/admin/database/"), {
+  return requestJson("/api/admin/database/", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ database }),
   });
-  return parseJson(res);
+}
+
+export async function fetchProviderSettings() {
+  return requestJson("/api/admin/provider/");
+}
+
+export async function saveProvider(provider) {
+  return requestJson("/api/admin/provider/", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ provider }),
+  });
 }
 
 export async function fetchOpenRouterSettings() {
-  const res = await fetch(apiUrl("/api/admin/openrouter/"));
-  return parseJson(res);
+  return requestJson("/api/admin/openrouter/");
 }
 
 export async function saveOpenRouterSettings(openrouter) {
-  const res = await fetch(apiUrl("/api/admin/openrouter/"), {
+  return requestJson("/api/admin/openrouter/", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ openrouter }),
   });
-  return parseJson(res);
+}
+
+export async function fetchOpenRouterModels({ force = false } = {}) {
+  const qs = force ? "?force=1" : "";
+  return requestJson(`/api/admin/openrouter/models/${qs}`);
+}
+
+export async function fetchCursorSettings() {
+  return requestJson("/api/admin/cursor/");
+}
+
+export async function saveCursorSettings(cursor) {
+  return requestJson("/api/admin/cursor/", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cursor }),
+  });
+}
+
+export async function fetchCursorModels({ force = false } = {}) {
+  const qs = force ? "?force=1" : "";
+  return requestJson(`/api/admin/cursor/models/${qs}`);
+}
+
+export async function fetchDocsTables() {
+  return requestJson("/api/docs/tables/");
+}
+
+export async function fetchDocsTable(table) {
+  return requestJson(`/api/docs/tables/${encodeURIComponent(table)}/`);
+}
+
+export async function fetchDbExplorerTables() {
+  return requestJson("/api/db-explorer/tables/");
+}
+
+export async function fetchDbExplorerColumns(table) {
+  const qs = `?table=${encodeURIComponent(table)}`;
+  return requestJson(`/api/db-explorer/columns/${qs}`);
+}
+
+export async function runDbExplorerQuery(payload) {
+  return requestJson("/api/db-explorer/query/", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
 }
 
 /**
@@ -196,12 +382,18 @@ export async function saveOpenRouterSettings(openrouter) {
  * @returns {Promise<{mode: string, text_report: string|null, echarts_option: object|null, used_demo?: boolean}>}
  */
 export async function streamRun({ prompt, mode }, onEvent, signal) {
-  const response = await fetch(apiUrl("/api/runs/stream"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-    body: JSON.stringify({ prompt, mode }),
-    signal,
-  });
+  const path = "/api/runs/stream";
+  let response;
+  try {
+    response = await apiFetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+      body: JSON.stringify({ prompt, mode }),
+      signal,
+    });
+  } catch (err) {
+    throw toApiError(err, path);
+  }
 
   if (!response.ok) {
     const text = await response.text().catch(() => "");
@@ -211,7 +403,16 @@ export async function streamRun({ prompt, mode }, onEvent, signal) {
     } catch {
       /* keep text */
     }
-    throw new Error(message || `API error ${response.status}`);
+    const apiErr = new ApiError({
+      kind: "stream",
+      status: response.status,
+      title: httpTitle(response.status),
+      message: message || `API error ${response.status}`,
+      detail: `HTTP ${response.status}`,
+      path,
+    });
+    emitApiError(apiErr);
+    throw apiErr;
   }
 
   const reader = response.body.getReader();
@@ -236,13 +437,27 @@ export async function streamRun({ prompt, mode }, onEvent, signal) {
         result = payload;
       }
       if (payload.event === "error") {
-        throw new Error(payload.message || "Run failed");
+        const apiErr = new ApiError({
+          kind: "stream",
+          title: "Run stream failed",
+          message: payload.message || "Run failed",
+          path,
+        });
+        emitApiError(apiErr);
+        throw apiErr;
       }
     }
   }
 
   if (!result) {
-    throw new Error("Stream ended without a result");
+    const apiErr = new ApiError({
+      kind: "stream",
+      title: "Run stream failed",
+      message: "Stream ended without a result",
+      path,
+    });
+    emitApiError(apiErr);
+    throw apiErr;
   }
   return result;
 }
@@ -251,23 +466,32 @@ export async function streamRun({ prompt, mode }, onEvent, signal) {
 export function getDemoResult(mode) {
   const echarts_option = {
     color: ["#3d9b82", "#5cb89a", "#7ab89f"],
+    backgroundColor: "transparent",
     title: {
       text: "Revenue by region",
       left: "center",
       textStyle: { color: "#e6ebe9", fontWeight: 600, fontSize: 16 },
     },
-    tooltip: { trigger: "axis" },
+    tooltip: {
+      trigger: "axis",
+      backgroundColor: "#24302d",
+      borderColor: "#3a4a45",
+      textStyle: { color: "#e6ebe9" },
+    },
     grid: { left: 48, right: 24, top: 56, bottom: 40 },
     xAxis: {
       type: "category",
       data: ["North", "South", "East", "West"],
       axisLabel: { color: "#9aada6" },
+      axisLine: { lineStyle: { color: "#3a4a45" } },
     },
     yAxis: {
       type: "value",
       name: "USD",
+      nameTextStyle: { color: "#9aada6" },
       axisLabel: { color: "#9aada6" },
       splitLine: { lineStyle: { color: "#3a4a45" } },
+      axisLine: { lineStyle: { color: "#3a4a45" } },
     },
     series: [
       {
@@ -278,7 +502,6 @@ export function getDemoResult(mode) {
         itemStyle: { borderRadius: [6, 6, 0, 0] },
       },
     ],
-    backgroundColor: "transparent",
   };
 
   const text_report =

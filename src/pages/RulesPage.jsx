@@ -4,6 +4,8 @@ import {
   deleteRule,
   fetchAgents,
   fetchRules,
+  renameAgent,
+  renameRule,
   updateRule,
 } from "../api/client.js";
 import AgentScopedMarkdownPage from "../components/AgentScopedMarkdownPage.jsx";
@@ -156,6 +158,34 @@ export default function RulesPage() {
     }
   }
 
+
+  async function handleRename() {
+    if (!selected) return;
+    const next = window.prompt("Rename rule", selected.id);
+    if (!next || next.trim() === selected.id) return;
+    setError(null);
+    try {
+      const updated = await renameRule(selected.id, next.trim());
+      await reload(selectedScope, updated.id);
+      setStatus(`Renamed to ${updated.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Rename failed");
+    }
+  }
+
+  async function handleRenameAgent(agent) {
+    const next = window.prompt("New agent display name", agent.name);
+    if (!next || next.trim() === agent.name) return;
+    setError(null);
+    try {
+      await renameAgent(agent.id, next.trim());
+      await reload(selectedScope, selectedId);
+      setStatus(`Agent renamed to ${next.trim()}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Rename failed");
+    }
+  }
+
   return (
     <AgentScopedMarkdownPage
       agents={agents}
@@ -174,13 +204,15 @@ export default function RulesPage() {
       onDraftChange={setDraft}
       onSave={handleSave}
       onDelete={handleDelete}
+      onRenameItem={handleRename}
+      onRenameAgent={handleRenameAgent}
       newId={newId}
       onNewIdChange={setNewId}
       onCreate={handleCreate}
       createPlaceholder="my-custom-rule"
       createLabel="Create rule"
       createInputId="rule-id"
-      createInputLabel="New rule id"
+      createInputLabel=""
       status={status}
       error={error}
       loading={loading}

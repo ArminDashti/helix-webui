@@ -4,6 +4,8 @@ import {
   deleteSkill,
   fetchAgents,
   fetchSkills,
+  renameAgent,
+  renameSkill,
   updateSkill,
 } from "../api/client.js";
 import AgentScopedMarkdownPage from "../components/AgentScopedMarkdownPage.jsx";
@@ -142,6 +144,34 @@ export default function SkillsPage() {
     }
   }
 
+
+  async function handleRename() {
+    if (!selected || !selectedScope) return;
+    const next = window.prompt("Rename skill", selected.id);
+    if (!next || next.trim() === selected.id) return;
+    setError(null);
+    try {
+      const updated = await renameSkill(selectedScope, selected.id, next.trim());
+      await reload(selectedScope, updated.id);
+      setStatus(`Renamed to ${updated.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Rename failed");
+    }
+  }
+
+  async function handleRenameAgent(agent) {
+    const next = window.prompt("New agent display name", agent.name);
+    if (!next || next.trim() === agent.name) return;
+    setError(null);
+    try {
+      await renameAgent(agent.id, next.trim());
+      await reload(selectedScope, selectedId);
+      setStatus(`Agent renamed to ${next.trim()}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Rename failed");
+    }
+  }
+
   return (
     <AgentScopedMarkdownPage
       agents={agents}
@@ -158,13 +188,15 @@ export default function SkillsPage() {
       onDraftChange={setDraft}
       onSave={handleSave}
       onDelete={handleDelete}
+      onRenameItem={handleRename}
+      onRenameAgent={handleRenameAgent}
       newId={newId}
       onNewIdChange={setNewId}
       onCreate={handleCreate}
       createPlaceholder="my-skill"
       createLabel="Create skill"
       createInputId="skill-id"
-      createInputLabel="New skill id"
+      createInputLabel=""
       status={status}
       error={error}
       loading={loading}

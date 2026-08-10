@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="Helix logo placeholder">
+  <rect width="128" height="128" rx="28" fill="#2c3a36"/>
+  <path d="M34 88c18-40 42-40 60 0" fill="none" stroke="#3d9b82" stroke-width="10" stroke-linecap="round"/>
+  <path d="M34 40c18 40 42 40 60 0" fill="none" stroke="#9aada6" stroke-width="10" stroke-linecap="round"/>
+  <circle cx="64" cy="64" r="8" fill="#e6ebe9"/>
+</svg>
