@@ -6,6 +6,7 @@ import {
   renameAgent,
   updateAgentInstruction,
 } from "../api/client.js";
+import AgentGraphDesigner from "../components/AgentGraphDesigner.jsx";
 
 const PIPELINE_DESIGNER_HINT = {
   id: "pipeline_designer",
@@ -21,6 +22,7 @@ export default function AgentsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [status, setStatus] = useState(null);
+  const [view, setView] = useState("list");
 
   const [selectedAgentId, setSelectedAgentId] = useState(null);
   const [agentName, setAgentName] = useState("");
@@ -178,31 +180,65 @@ export default function AgentsPage() {
             Built-in pipeline agents plus custom profiles (e.g. Pipeline Designer).
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            setShowCreate(true);
-            setStatus(null);
-            setError(null);
-            fillPipelineDesigner();
-          }}
-          className="rounded-xl bg-moss px-4 py-2 text-sm font-semibold text-white hover:bg-moss-deep"
-        >
-          New agent
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <div
+            className="flex rounded-xl border border-line bg-fog/40 p-0.5"
+            role="tablist"
+            aria-label="Agents view"
+          >
+            {[
+              { id: "list", label: "List" },
+              { id: "arrange", label: "Arrange" },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={view === tab.id}
+                onClick={() => setView(tab.id)}
+                className={[
+                  "rounded-lg px-3 py-1.5 text-sm font-medium transition",
+                  view === tab.id
+                    ? "bg-moss text-white"
+                    : "text-ink hover:bg-fog",
+                ].join(" ")}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          {view === "list" ? (
+            <button
+              type="button"
+              onClick={() => {
+                setShowCreate(true);
+                setStatus(null);
+                setError(null);
+                fillPipelineDesigner();
+              }}
+              className="rounded-xl bg-moss px-4 py-2 text-sm font-semibold text-white hover:bg-moss-deep"
+            >
+              New agent
+            </button>
+          ) : null}
+        </div>
       </header>
 
-      {error ? (
+      {error && view === "list" ? (
         <p className="shrink-0 rounded-xl border border-warn-border bg-warn-bg px-4 py-2 text-sm text-warn">
           {error}
         </p>
       ) : null}
-      {status ? (
+      {status && view === "list" ? (
         <p className="shrink-0 rounded-xl border border-line bg-paper/80 px-4 py-2 text-sm text-moss">
           {status}
         </p>
       ) : null}
 
+      {view === "arrange" ? (
+        <AgentGraphDesigner agents={agents} />
+      ) : (
+        <>
       {showCreate ? (
         <form
           onSubmit={handleCreateAgent}
@@ -379,6 +415,8 @@ export default function AgentsPage() {
           )}
         </form>
       </div>
+        </>
+      )}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { renderMarkdownToHtml } from "../lib/markdownPreview.js";
 
 /**
@@ -38,6 +38,13 @@ export default function AgentScopedMarkdownPage({
   loadingLabel = "Loading…",
 }) {
   const [viewMode, setViewMode] = useState("source");
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
+
+  useEffect(() => {
+    setEditingTitle(false);
+    setTitleDraft(selectedId || "");
+  }, [selectedId, selectedScope]);
 
   if (loading) {
     return <p className="text-sm text-muted">{loadingLabel}</p>;
@@ -47,6 +54,17 @@ export default function AgentScopedMarkdownPage({
     selectedScope === "shared"
       ? "Shared"
       : agents.find((a) => a.id === selectedScope)?.name || selectedScope;
+
+  async function commitTitleRename() {
+    const next = titleDraft.trim();
+    setEditingTitle(false);
+    if (!canRename || !onRenameItem || !selectedId) return;
+    if (!next || next === selectedId) {
+      setTitleDraft(selectedId);
+      return;
+    }
+    await onRenameItem(next);
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
@@ -182,9 +200,49 @@ export default function AgentScopedMarkdownPage({
 
         <div className="flex min-h-0 flex-col gap-2 rounded-2xl border border-line/80 bg-paper/80 p-3 sm:p-4">
           <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
-            <h2 className="font-display text-xl text-ink sm:text-2xl">
-              {editorTitle || "Select an item"}
-            </h2>
+            {editingTitle && canRename && selectedId && onRenameItem ? (
+              <input
+                value={titleDraft}
+                onChange={(e) => setTitleDraft(e.target.value)}
+                onBlur={() => {
+                  void commitTitleRename();
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void commitTitleRename();
+                  }
+                  if (e.key === "Escape") {
+                    setEditingTitle(false);
+                    setTitleDraft(selectedId);
+                  }
+                }}
+                className="min-w-[12rem] flex-1 rounded-xl border border-line bg-fog/40 px-3 py-1.5 font-display text-xl text-ink outline-none focus:border-moss focus:ring-2 focus:ring-moss/30 sm:text-2xl"
+                aria-label="Rename item"
+                autoFocus
+              />
+            ) : (
+              <h2
+                className={[
+                  "font-display text-xl text-ink sm:text-2xl",
+                  canRename && selectedId && onRenameItem
+                    ? "cursor-text rounded-lg px-1 hover:bg-fog/60"
+                    : "",
+                ].join(" ")}
+                title={
+                  canRename && selectedId && onRenameItem
+                    ? "Click to rename"
+                    : undefined
+                }
+                onClick={() => {
+                  if (!canRename || !selectedId || !onRenameItem) return;
+                  setTitleDraft(selectedId);
+                  setEditingTitle(true);
+                }}
+              >
+                {editorTitle || "Select an item"}
+              </h2>
+            )}
             <div className="flex flex-wrap gap-2">
               <div
                 className="flex rounded-xl border border-line bg-fog/40 p-0.5"
@@ -231,7 +289,7 @@ export default function AgentScopedMarkdownPage({
               {canRename && onRenameItem ? (
                 <button
                   type="button"
-                  onClick={onRenameItem}
+                  onClick={() => onRenameItem()}
                   disabled={!selectedId}
                   className="rounded-xl border border-line bg-fog px-4 py-2 text-sm hover:bg-fog/80 disabled:opacity-50"
                 >

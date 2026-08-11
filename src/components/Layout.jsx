@@ -18,16 +18,29 @@ const LINKS = [
 ];
 
 function statusDotClass(status) {
-  if (status === "connected" || status === "configured") return "text-moss";
-  if (status === "not_configured" || status === "missing_token") return "text-ink";
-  if (!status) return "text-muted";
-  return "text-warn";
+  if (status === "connected" || status === "configured") return "bg-moss";
+  if (status === "not_configured" || status === "missing_token") return "bg-ink/50";
+  if (!status) return "bg-muted";
+  return "bg-warn";
 }
 
 function formatServiceStatus(status, checking) {
   if (checking && !status) return "Checking…";
   if (!status) return "Unknown";
   return status.replace(/_/g, " ");
+}
+
+function StatusDot({ status, label, checking }) {
+  const title = `${label}: ${formatServiceStatus(status, checking)}`;
+  return (
+    <span className="inline-flex items-center gap-1.5" title={title}>
+      <span className="text-muted">{label}</span>
+      <span
+        className={`inline-block size-2 shrink-0 rounded-full ${statusDotClass(status)}`}
+        aria-label={title}
+      />
+    </span>
+  );
 }
 
 function readTheme() {
@@ -159,28 +172,22 @@ export default function Layout() {
             ].join(" ")}
           >
             {collapsed ? (
-              <span className="inline-flex flex-col items-center gap-0.5 leading-none">
-                <span className={statusDotClass(apiStatus)} title={`API: ${formatServiceStatus(apiStatus, checking)}`}>
-                  ●
-                </span>
-                <span className={statusDotClass(dbStatus)} title={`DB: ${formatServiceStatus(dbStatus, checking)}`}>
-                  ●
-                </span>
+              <span className="inline-flex flex-col items-center gap-1.5 leading-none">
+                <span
+                  className={`inline-block size-2 rounded-full ${statusDotClass(apiStatus)}`}
+                  title={`API: ${formatServiceStatus(apiStatus, checking)}`}
+                  aria-label={`API: ${formatServiceStatus(apiStatus, checking)}`}
+                />
+                <span
+                  className={`inline-block size-2 rounded-full ${statusDotClass(dbStatus)}`}
+                  title={`DB: ${formatServiceStatus(dbStatus, checking)}`}
+                  aria-label={`DB: ${formatServiceStatus(dbStatus, checking)}`}
+                />
               </span>
             ) : (
-              <span className="block space-y-0.5">
-                <span className="flex items-center justify-between gap-1">
-                  <span className="text-muted">API</span>
-                  <span className={`capitalize ${statusDotClass(apiStatus)}`}>
-                    {formatServiceStatus(apiStatus, checking)}
-                  </span>
-                </span>
-                <span className="flex items-center justify-between gap-1">
-                  <span className="text-muted">DB</span>
-                  <span className={`capitalize ${statusDotClass(dbStatus)}`}>
-                    {formatServiceStatus(dbStatus, checking)}
-                  </span>
-                </span>
+              <span className="flex items-center gap-4">
+                <StatusDot status={apiStatus} label="API" checking={checking} />
+                <StatusDot status={dbStatus} label="DB" checking={checking} />
               </span>
             )}
           </Link>

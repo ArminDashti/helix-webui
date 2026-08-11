@@ -89,7 +89,7 @@ export default function DocsPage() {
         </p>
       ) : null}
 
-      <div className="grid min-h-0 flex-1 gap-2 lg:grid-cols-[260px_1fr]">
+      <div className="grid min-h-0 flex-1 gap-2 lg:grid-cols-[minmax(22rem,32rem)_1fr]">
         <aside className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-line/80 bg-paper/80 p-2">
           <p className="px-2 text-xs font-semibold uppercase tracking-wide text-muted">
             Tables
@@ -122,7 +122,9 @@ export default function DocsPage() {
                         : "text-ink hover:bg-fog",
                     ].join(" ")}
                   >
-                    <span className="block truncate font-medium">{t.full_name}</span>
+                    <span className="block break-all whitespace-normal font-medium">
+                      {t.full_name}
+                    </span>
                     <span
                       className={[
                         "block text-[11px]",

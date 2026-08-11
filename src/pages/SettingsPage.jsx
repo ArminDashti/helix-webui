@@ -32,6 +32,8 @@ const EMPTY_OPENROUTER = {
   default_model: "openai/gpt-4o-mini",
   agents: {},
   token_configured: false,
+  token_hint: "",
+  token_from_env: false,
 };
 
 const EMPTY_CURSOR = {
@@ -39,6 +41,8 @@ const EMPTY_CURSOR = {
   default_model: "composer-2",
   agents: {},
   token_configured: false,
+  token_hint: "",
+  token_from_env: false,
 };
 
 const AGENT_LABELS = {
@@ -77,9 +81,12 @@ export default function SettingsPage() {
 
   const [dbForm, setDbForm] = useState(EMPTY_DB);
   const [connectionString, setConnectionString] = useState("");
+  const [connectionStringDirty, setConnectionStringDirty] = useState(false);
   const [provider, setProvider] = useState("openrouter");
   const [orForm, setOrForm] = useState(EMPTY_OPENROUTER);
+  const [orApiKey, setOrApiKey] = useState("");
   const [cursorForm, setCursorForm] = useState(EMPTY_CURSOR);
+  const [cursorApiKey, setCursorApiKey] = useState("");
   const [models, setModels] = useState([]);
   const [cursorModels, setCursorModels] = useState([]);
   const [modelsLoading, setModelsLoading] = useState(false);
@@ -195,6 +202,7 @@ export default function SettingsPage() {
 
   function updateDbField(key, value) {
     setDbForm((prev) => ({ ...prev, [key]: value }));
+    setConnectionStringDirty(false);
   }
 
   function updateOrField(key, value) {
@@ -233,8 +241,12 @@ export default function SettingsPage() {
         default_model: cursorForm.default_model,
         agents: cursorForm.agents,
       };
+      if (cursorApiKey.trim()) {
+        payload.api_key = cursorApiKey.trim();
+      }
       const data = await saveCursorSettings(payload);
       setCursorForm({ ...EMPTY_CURSOR, ...data.cursor });
+      setCursorApiKey("");
       setStatus("Cursor API settings saved.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
@@ -246,13 +258,16 @@ export default function SettingsPage() {
     setError(null);
     setStatus(null);
     try {
-      const payload = {
-        ...dbForm,
-        port: Number(dbForm.port) || 1433,
-      };
+      const payload = connectionStringDirty
+        ? { connection_string: connectionString }
+        : {
+            ...dbForm,
+            port: Number(dbForm.port) || 1433,
+          };
       const data = await saveDatabaseSettings(payload);
       setDbForm({ ...EMPTY_DB, ...data.database });
       setConnectionString(data.connection_string || "");
+      setConnectionStringDirty(false);
       setStatus("SQL settings saved to helix.config.yaml.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
@@ -270,8 +285,12 @@ export default function SettingsPage() {
         default_model: orForm.default_model,
         agents: orForm.agents,
       };
+      if (orApiKey.trim()) {
+        payload.api_key = orApiKey.trim();
+      }
       const data = await saveOpenRouterSettings(payload);
       setOrForm({ ...EMPTY_OPENROUTER, ...data.openrouter });
+      setOrApiKey("");
       setStatus("OpenRouter settings saved to helix.config.yaml.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
@@ -409,16 +428,29 @@ export default function SettingsPage() {
             </button>
           </div>
 
-          <p
-            className={`rounded-xl border px-4 py-2 text-sm ${
-              orForm.token_configured
-                ? "border-line bg-fog/40 text-moss"
-                : "border-warn-border bg-warn-bg text-warn"
-            }`}
-          >
+          <Field label="API key" id="openrouter_api_key">
+            <input
+              id="openrouter_api_key"
+              type="password"
+              value={orApiKey}
+              onChange={(e) => setOrApiKey(e.target.value)}
+              className={inputClass}
+              autoComplete="new-password"
+              placeholder={
+                orForm.token_configured
+                  ? orForm.token_from_env
+                    ? `Configured via env (${orForm.token_hint || "••••"})`
+                    : `Configured (${orForm.token_hint || "••••"}) — enter to replace`
+                  : "Enter OpenRouter API key"
+              }
+            />
+          </Field>
+          <p className="text-xs text-muted">
             {orForm.token_configured
-              ? "Token: set via OPENROUTER_TOKEN"
-              : "Token: missing — set the OPENROUTER_TOKEN environment variable"}
+              ? orForm.token_from_env
+                ? "Using OPENROUTER_TOKEN from the environment (overrides saved key)."
+                : "Key is saved in helix.config.yaml."
+              : "No key configured yet."}
           </p>
 
           {modelsError ? (
@@ -520,16 +552,29 @@ export default function SettingsPage() {
             </button>
           </div>
 
-          <p
-            className={`rounded-xl border px-4 py-2 text-sm ${
-              cursorForm.token_configured
-                ? "border-line bg-fog/40 text-moss"
-                : "border-warn-border bg-warn-bg text-warn"
-            }`}
-          >
+          <Field label="API key" id="cursor_api_key">
+            <input
+              id="cursor_api_key"
+              type="password"
+              value={cursorApiKey}
+              onChange={(e) => setCursorApiKey(e.target.value)}
+              className={inputClass}
+              autoComplete="new-password"
+              placeholder={
+                cursorForm.token_configured
+                  ? cursorForm.token_from_env
+                    ? `Configured via env (${cursorForm.token_hint || "••••"})`
+                    : `Configured (${cursorForm.token_hint || "••••"}) — enter to replace`
+                  : "Enter Cursor API key"
+              }
+            />
+          </Field>
+          <p className="text-xs text-muted">
             {cursorForm.token_configured
-              ? "API key: set via CURSOR_API_KEY"
-              : "API key: missing — set the CURSOR_API_KEY environment variable"}
+              ? cursorForm.token_from_env
+                ? "Using CURSOR_API_KEY from the environment (overrides saved key)."
+                : "Key is saved in helix.config.yaml."
+              : "No key configured yet."}
           </p>
 
           {cursorModelsError ? (
@@ -695,15 +740,22 @@ export default function SettingsPage() {
 
           <div>
             <label htmlFor="conn" className="block text-sm font-medium text-ink">
-              Connection string (read-only preview)
+              Connection string
             </label>
             <textarea
               id="conn"
-              readOnly
-              rows={2}
+              rows={3}
               value={connectionString}
-              className="mt-1 w-full resize-y rounded-xl border border-line bg-fog/60 px-3 py-2 font-mono text-[12px] text-muted outline-none"
+              onChange={(e) => {
+                setConnectionString(e.target.value);
+                setConnectionStringDirty(true);
+              }}
+              className="mt-1 w-full resize-y rounded-xl border border-line bg-fog/40 px-3 py-2 font-mono text-[12px] text-ink outline-none focus:border-moss focus:ring-2 focus:ring-moss/30"
+              spellCheck={false}
             />
+            <p className="mt-1 text-xs text-muted">
+              Edit and save to update host, port, database, user, and password fields.
+            </p>
           </div>
 
           <button

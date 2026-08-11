@@ -159,13 +159,16 @@ export default function RulesPage() {
   }
 
 
-  async function handleRename() {
+  async function handleRename(nextId) {
     if (!selected) return;
-    const next = window.prompt("Rename rule", selected.id);
-    if (!next || next.trim() === selected.id) return;
+    const next =
+      typeof nextId === "string"
+        ? nextId.trim()
+        : (window.prompt("Rename rule", selected.id) || "").trim();
+    if (!next || next === selected.id) return;
     setError(null);
     try {
-      const updated = await renameRule(selected.id, next.trim());
+      const updated = await renameRule(selected.id, next);
       await reload(selectedScope, updated.id);
       setStatus(`Renamed to ${updated.id}`);
     } catch (err) {

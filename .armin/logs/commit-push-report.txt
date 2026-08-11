@@ -1,60 +1,62 @@
-pushed|C:\Users\a.dashti\.cursor||
-up_to_date|C:\Users\a.dashti\GitHub\.cursor||
-pushed|C:\Users\a.dashti\GitHub\agent-knowledge||
-pushed|C:\Users\a.dashti\GitHub\aipedia-api||
-pushed|C:\Users\a.dashti\GitHub\aipedia-webui||
-failed|C:\Users\a.dashti\GitHub\armin-command-center||An object at the specified path C:\Users\AC508~1.DAS does not exist.
-pushed|C:\Users\a.dashti\GitHub\armindashti.github.io||
-pushed|C:\Users\a.dashti\GitHub\asip-api||
-pushed|C:\Users\a.dashti\GitHub\asip-webui||
-pushed|C:\Users\a.dashti\GitHub\bookmarks||
-pushed|C:\Users\a.dashti\GitHub\city-traffic||
-pushed|C:\Users\a.dashti\GitHub\cs-quiz-api||
-pushed|C:\Users\a.dashti\GitHub\cs-quiz-webui||
-pushed|C:\Users\a.dashti\GitHub\cursor-memory-bank||
-pushed|C:\Users\a.dashti\GitHub\cursor-openai-adapter||
-pushed|C:\Users\a.dashti\GitHub\cursor-workspaces||
-up_to_date|C:\Users\a.dashti\GitHub\db-api||
-pushed|C:\Users\a.dashti\GitHub\exar-api||
-pushed|C:\Users\a.dashti\GitHub\exar-web||
-pushed|C:\Users\a.dashti\GitHub\exar-webui||
-pushed|C:\Users\a.dashti\GitHub\geoquiz-api||
-blocked_secrets|C:\Users\a.dashti\GitHub\geoquiz-webui||.env
-pushed|C:\Users\a.dashti\GitHub\helix-api||
-failed|C:\Users\a.dashti\GitHub\helix-webui||An object at the specified path C:\Users\AC508~1.DAS does not exist.
-pushed|C:\Users\a.dashti\GitHub\irancell-t3||
-pushed|C:\Users\a.dashti\GitHub\janus-api||
-pushed|C:\Users\a.dashti\GitHub\janus-hub||
-pushed|C:\Users\a.dashti\GitHub\janus-webui||
-pushed|C:\Users\a.dashti\GitHub\knowledge-center-api||
-pushed|C:\Users\a.dashti\GitHub\knowledge-center-webui||
-pushed|C:\Users\a.dashti\GitHub\lexmora-api||
-pushed|C:\Users\a.dashti\GitHub\lexmora-webui||
-pushed|C:\Users\a.dashti\GitHub\llm-forecasting||
-pushed|C:\Users\a.dashti\GitHub\MCPs||
-pushed|C:\Users\a.dashti\GitHub\netvan-api||
-pushed|C:\Users\a.dashti\GitHub\netvan-webui||
-pushed|C:\Users\a.dashti\GitHub\nevarix-api||
-pushed|C:\Users\a.dashti\GitHub\nevarix-webui||
-pushed|C:\Users\a.dashti\GitHub\parkiroid||
-up_to_date|C:\Users\a.dashti\GitHub\parkiroid-android||
-pushed|C:\Users\a.dashti\GitHub\parkiroid-api||
-up_to_date|C:\Users\a.dashti\GitHub\parkiroid-server||
-pushed|C:\Users\a.dashti\GitHub\parkiroid-web||
-pushed|C:\Users\a.dashti\GitHub\parkiroid-webui||
-up_to_date|C:\Users\a.dashti\GitHub\prompt-corrector-agent||
-up_to_date|C:\Users\a.dashti\GitHub\prompt-corrector-api||
-up_to_date|C:\Users\a.dashti\GitHub\prompt-corrector-webui||
-pushed|C:\Users\a.dashti\GitHub\prompt-gallery||
-pushed|C:\Users\a.dashti\GitHub\proxy-agent||
-pushed|C:\Users\a.dashti\GitHub\resume||
-pushed|C:\Users\a.dashti\GitHub\roust||
-pushed|C:\Users\a.dashti\GitHub\roust-api||
-pushed|C:\Users\a.dashti\GitHub\roust-webui||
-pushed|C:\Users\a.dashti\GitHub\scripts-for-run-projects||
-pushed|C:\Users\a.dashti\GitHub\siteinfo-browser-extension||
-pushed|C:\Users\a.dashti\GitHub\susiana||
-pushed|C:\Users\a.dashti\GitHub\susiana-api||
-pushed|C:\Users\a.dashti\GitHub\windows-auto-wallpaper||
-SKIP|plugin-caches(3)||third-party plugin caches
-SKIP|parkiroid-worktree||nested worktree
+failed|C:\Users\a.dashti\.cursor||The script failed due to call depth overflow.
+SKIP|C:\Users\a.dashti\.cursor\plugins\cache\cursor-public\browserstack\b3ef869a2c9faceebd58e6a319a409433ccc3244||third-party cache or nested worktree
+SKIP|C:\Users\a.dashti\.cursor\plugins\cache\cursor-public\huggingface-skills\d7223848c3895fbd447faf2aec73e0a6cdd7fdcd||third-party cache or nested worktree
+SKIP|C:\Users\a.dashti\.cursor\plugins\cache\cursor-public\superpowers\d884ae04edebef577e82ff7c4e143debd0bbec99||third-party cache or nested worktree
+failed|C:\Users\a.dashti\GitHub\.cursor||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\agent-knowledge||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\aipedia-api||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\aipedia-webui||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\armin-command-center||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\armindashti.github.io||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\asip-api||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\asip-webui||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\bookmarks||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\city-traffic||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\cs-quiz-api||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\cs-quiz-webui||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\cursor-memory-bank||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\cursor-openai-adapter||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\cursor-workspaces||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\db-api||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\exar-api||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\exar-web||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\exar-webui||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\geoquiz-api||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\geoquiz-webui||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\helix-api||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\helix-webui||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\irancell-t3||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\janus-api||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\janus-hub||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\janus-webui||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\knowledge-center-api||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\knowledge-center-webui||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\lexmora-api||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\lexmora-webui||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\llm-forecasting||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\MCPs||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\netvan-api||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\netvan-webui||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\nevarix-api||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\nevarix-webui||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\parkiroid||The script failed due to call depth overflow.
+SKIP|C:\Users\a.dashti\GitHub\parkiroid\.claude\worktrees\sleepy-elbakyan-cc979e||third-party cache or nested worktree
+failed|C:\Users\a.dashti\GitHub\parkiroid-android||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\parkiroid-api||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\parkiroid-server||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\parkiroid-web||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\parkiroid-webui||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\prompt-corrector-agent||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\prompt-corrector-api||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\prompt-corrector-webui||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\prompt-gallery||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\proxy-agent||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\resume||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\roust||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\roust-api||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\roust-webui||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\scripts-for-run-projects||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\siteinfo-browser-extension||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\susiana||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\susiana-api||The script failed due to call depth overflow.
+failed|C:\Users\a.dashti\GitHub\windows-auto-wallpaper||The script failed due to call depth overflow.
