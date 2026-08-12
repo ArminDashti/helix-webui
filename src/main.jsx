@@ -1,6 +1,18 @@
+const THEME_STORAGE_KEY = "helix-theme";
+
+function systemPrefersDark() {
+  return window.matchMedia("(prefers-color-scheme: dark)").matches;
+}
+
+function resolveTheme(preference) {
+  if (preference === "light") return "light";
+  if (preference === "system") return systemPrefersDark() ? "dark" : "light";
+  return "dark";
+}
+
 try {
-  const theme = localStorage.getItem("helix-theme") || "dark";
-  document.documentElement.setAttribute("data-theme", theme === "light" ? "light" : "dark");
+  const saved = localStorage.getItem(THEME_STORAGE_KEY) || "dark";
+  document.documentElement.setAttribute("data-theme", resolveTheme(saved));
 } catch {
   document.documentElement.setAttribute("data-theme", "dark");
 }

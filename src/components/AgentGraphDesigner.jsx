@@ -31,8 +31,7 @@ function AgentNode({ data }) {
   return (
     <div className="min-w-[9rem] rounded-xl border border-line bg-paper px-3 py-2 shadow-sm">
       <Handle type="target" position={Position.Top} className="!bg-moss" />
-      <p className="text-sm font-semibold text-ink">{data.label}</p>
-      <p className="truncate font-mono text-[10px] text-muted">{data.agentId}</p>
+      <p className="truncate text-sm font-semibold text-ink">{data.label}</p>
       <Handle type="source" position={Position.Bottom} className="!bg-moss" />
     </div>
   );

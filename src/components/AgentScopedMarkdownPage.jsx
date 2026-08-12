@@ -21,7 +21,6 @@ export default function AgentScopedMarkdownPage({
   onSave,
   onDelete,
   onRenameItem,
-  onRenameAgent,
   canDelete = true,
   canRename = true,
   showCreate = true,
@@ -49,11 +48,6 @@ export default function AgentScopedMarkdownPage({
   if (loading) {
     return <p className="text-sm text-muted">{loadingLabel}</p>;
   }
-
-  const scopeLabel =
-    selectedScope === "shared"
-      ? "Shared"
-      : agents.find((a) => a.id === selectedScope)?.name || selectedScope;
 
   async function commitTitleRename() {
     const next = titleDraft.trim();
@@ -134,15 +128,6 @@ export default function AgentScopedMarkdownPage({
                 >
                   {agent.name}
                 </button>
-                {onRenameAgent ? (
-                  <button
-                    type="button"
-                    onClick={() => onRenameAgent(agent)}
-                    className="w-full rounded-lg px-3 py-0.5 text-left text-[11px] text-muted hover:bg-fog hover:text-ink"
-                  >
-                    Rename agent
-                  </button>
-                ) : null}
               </li>
             ))}
           </ul>
@@ -165,11 +150,6 @@ export default function AgentScopedMarkdownPage({
         <aside className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-line/80 bg-paper/80 p-2">
           <p className="shrink-0 px-2 text-xs font-semibold uppercase tracking-wide text-muted">
             {itemsTitle}
-            {scopeLabel ? (
-              <span className="mt-0.5 block font-normal normal-case tracking-normal text-muted">
-                {scopeLabel}
-              </span>
-            ) : null}
           </p>
           <ul className="mt-1 min-h-0 flex-1 space-y-0.5 overflow-y-auto">
             {items.length === 0 ? (

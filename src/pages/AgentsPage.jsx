@@ -336,17 +336,6 @@ export default function AgentsPage() {
                     ].join(" ")}
                   >
                     <span className="block truncate font-medium">{agent.name}</span>
-                    <span
-                      className={[
-                        "block truncate text-[11px]",
-                        selectedAgentId === agent.id
-                          ? "text-white/80"
-                          : "text-muted",
-                      ].join(" ")}
-                    >
-                      {agent.id}
-                      {agent.builtin === false ? " · custom" : ""}
-                    </span>
                   </button>
                 </li>
               ))
@@ -361,7 +350,7 @@ export default function AgentsPage() {
           {selectedAgentId ? (
             <>
               <label className="block text-sm">
-                <span className="font-medium text-ink">Display name</span>
+                <span className="font-medium text-ink">Name</span>
                 <input
                   id="agent_display_name"
                   value={agentName}
@@ -369,12 +358,6 @@ export default function AgentsPage() {
                   className={inputClass}
                 />
               </label>
-              {agentDescription ? (
-                <p className="text-sm text-muted">{agentDescription}</p>
-              ) : null}
-              <p className="text-[11px] uppercase tracking-wide text-muted">
-                {selectedBuiltin ? "Built-in pipeline agent" : "Custom agent"}
-              </p>
               <div className="flex min-h-0 flex-1 flex-col">
                 <label
                   htmlFor="agent_instruction"

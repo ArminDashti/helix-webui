@@ -400,16 +400,32 @@ export async function runDbExplorerQuery(payload) {
 
 /**
  * Stream a run via SSE (POST). Calls onEvent for each parsed JSON payload.
- * @returns {Promise<{mode: string, text_report: string|null, echarts_option: object|null, used_demo?: boolean}>}
+ * @returns {Promise<{mode: string, text_report: string|null, echarts_option: object|null, grid?: object|null, used_demo?: boolean}>}
  */
-export async function streamRun({ prompt, mode }, onEvent, signal) {
+export async function streamRun(
+  {
+    prompt,
+    mode,
+    language = "en",
+    report_type,
+    chart_type,
+    columns,
+  },
+  onEvent,
+  signal,
+) {
   const path = "/api/runs/stream";
+  const body = { prompt, mode, language };
+  if (report_type) body.report_type = report_type;
+  if (chart_type) body.chart_type = chart_type;
+  if (columns?.length) body.columns = columns;
+
   let response;
   try {
     response = await apiFetch(path, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-      body: JSON.stringify({ prompt, mode }),
+      body: JSON.stringify(body),
       signal,
     });
   } catch (err) {
@@ -484,17 +500,34 @@ export async function streamRun({ prompt, mode }, onEvent, signal) {
 }
 
 /** Sample payload so the UI can be reviewed without a running backend. */
-export function getDemoResult(mode) {
+export function getDemoResult(
+  mode,
+  { language = "en", report_type = "summary", chart_type = "bar", columns } = {},
+) {
+  const normalized =
+    mode === "analysis"
+      ? "analytical_report"
+      : mode === "both"
+        ? "analytical_report_chart"
+        : mode || "auto";
+
+  const title = language === "fa" ? "درآمد بر اساس منطقه" : "Revenue by region";
+  const cats =
+    language === "fa"
+      ? ["شمال", "جنوب", "شرق", "غرب"]
+      : ["North", "South", "East", "West"];
+  const values = [420, 310, 510, 280];
+
   const echarts_option = {
     color: ["#3d9b82", "#5cb89a", "#7ab89f"],
     backgroundColor: "transparent",
     title: {
-      text: "Revenue by region",
+      text: title,
       left: "center",
       textStyle: { color: "#e6ebe9", fontWeight: 600, fontSize: 16 },
     },
     tooltip: {
-      trigger: "axis",
+      trigger: chart_type === "pie" || chart_type === "donut" ? "item" : "axis",
       backgroundColor: "#24302d",
       borderColor: "#3a4a45",
       textStyle: { color: "#e6ebe9" },
@@ -502,13 +535,13 @@ export function getDemoResult(mode) {
     grid: { left: 48, right: 24, top: 56, bottom: 40 },
     xAxis: {
       type: "category",
-      data: ["North", "South", "East", "West"],
+      data: cats,
       axisLabel: { color: "#9aada6" },
       axisLine: { lineStyle: { color: "#3a4a45" } },
     },
     yAxis: {
       type: "value",
-      name: "USD",
+      name: language === "fa" ? "واحد" : "USD",
       nameTextStyle: { color: "#9aada6" },
       axisLabel: { color: "#9aada6" },
       splitLine: { lineStyle: { color: "#3a4a45" } },
@@ -516,9 +549,10 @@ export function getDemoResult(mode) {
     },
     series: [
       {
-        name: "Revenue",
-        type: "bar",
-        data: [420, 310, 510, 280],
+        name: language === "fa" ? "درآمد" : "Revenue",
+        type: chart_type === "line" || chart_type === "area" ? "line" : "bar",
+        data: values,
+        ...(chart_type === "area" ? { areaStyle: {} } : {}),
         barWidth: "48%",
         itemStyle: { borderRadius: [6, 6, 0, 0] },
       },
@@ -526,14 +560,60 @@ export function getDemoResult(mode) {
   };
 
   const text_report =
-    "North and East lead revenue this period. East is highest at 510; West trails at 280. " +
-    "Focus follow-up on West conversion and East capacity. (Demo sample — backend not connected.)";
+    language === "fa"
+      ? "شرق بیشترین درآمد را دارد. غرب نیاز به بهبود دارد. (نمونه دمو)"
+      : "North and East lead revenue this period. East is highest at 510; West trails at 280. (Demo sample — backend not connected.)";
 
-  if (mode === "analysis") {
-    return { mode, text_report, echarts_option: null };
+  const cols = columns?.length
+    ? columns
+    : language === "fa"
+      ? ["منطقه", "درآمد", "واحد"]
+      : ["Region", "Revenue", "Units"];
+  const grid = {
+    columns: cols,
+    rows: cats.map((region, i) => ({
+      [cols[0]]: region,
+      [cols[1]]: values[i],
+      [cols[2]]: [12, 9, 15, 7][i],
+    })),
+  };
+
+  if (normalized === "analytical_report") {
+    return {
+      mode: normalized,
+      language,
+      text_report,
+      echarts_option: null,
+      grid: null,
+      report_type,
+    };
   }
-  if (mode === "chart") {
-    return { mode, text_report: null, echarts_option };
+  if (normalized === "chart") {
+    return {
+      mode: normalized,
+      language,
+      text_report: null,
+      echarts_option,
+      grid: null,
+      chart_type,
+    };
   }
-  return { mode: "both", text_report, echarts_option };
+  if (normalized === "grid") {
+    return {
+      mode: normalized,
+      language,
+      text_report: null,
+      echarts_option: null,
+      grid,
+    };
+  }
+  return {
+    mode: normalized === "auto" ? "auto" : "analytical_report_chart",
+    language,
+    text_report,
+    echarts_option,
+    grid: null,
+    report_type,
+    chart_type,
+  };
 }

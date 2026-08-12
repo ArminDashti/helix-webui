@@ -4,7 +4,6 @@ import {
   deleteRule,
   fetchAgents,
   fetchRules,
-  renameAgent,
   renameRule,
   updateRule,
 } from "../api/client.js";
@@ -176,19 +175,6 @@ export default function RulesPage() {
     }
   }
 
-  async function handleRenameAgent(agent) {
-    const next = window.prompt("New agent display name", agent.name);
-    if (!next || next.trim() === agent.name) return;
-    setError(null);
-    try {
-      await renameAgent(agent.id, next.trim());
-      await reload(selectedScope, selectedId);
-      setStatus(`Agent renamed to ${next.trim()}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Rename failed");
-    }
-  }
-
   return (
     <AgentScopedMarkdownPage
       agents={agents}
@@ -208,7 +194,6 @@ export default function RulesPage() {
       onSave={handleSave}
       onDelete={handleDelete}
       onRenameItem={handleRename}
-      onRenameAgent={handleRenameAgent}
       newId={newId}
       onNewIdChange={setNewId}
       onCreate={handleCreate}

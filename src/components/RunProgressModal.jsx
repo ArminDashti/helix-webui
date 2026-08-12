@@ -1,19 +1,15 @@
 import { useEffect, useRef } from "react";
 
-const AGENT_NAMES = {
-  task_validator: "Task Validator",
-  solution_strategist: "Solution Strategist",
-  technical_architect: "Technical Architect",
-  code_builder: "Code Builder",
-  sql_guardian: "SQL Guardian",
-  implementation_auditor: "Implementation Auditor",
-  response_publisher: "Response Publisher",
+const FALLBACK_NAMES = {
   user: "Prompt",
   system: "System",
 };
 
-function agentLabel(agentId) {
-  return AGENT_NAMES[agentId] || agentId || "Agent";
+function agentLabel(agentId, nameById) {
+  if (nameById?.[agentId]) return nameById[agentId];
+  if (FALLBACK_NAMES[agentId]) return FALLBACK_NAMES[agentId];
+  if (!agentId) return "Agent";
+  return agentId.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 /**
@@ -26,6 +22,7 @@ export default function RunProgressModal({
   running,
   error,
   onDismiss,
+  nameById = {},
 }) {
   const listRef = useRef(null);
 
@@ -66,7 +63,7 @@ export default function RunProgressModal({
               className="rounded-lg border border-line/60 bg-fog/60 px-3 py-2 animate-[fadeIn_0.4s_ease]"
             >
               <span className="font-medium text-moss">
-                {agentLabel(m.agent_id)}
+                {agentLabel(m.agent_id, nameById)}
               </span>
               <p className="mt-0.5 text-ink/90">{m.message}</p>
             </li>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
 import {
+  fetchAgents,
   fetchCursorModels,
   fetchCursorSettings,
   fetchDatabaseSettings,
@@ -16,15 +17,24 @@ import ModelCombobox from "../components/ModelCombobox.jsx";
 import { useApiStatus } from "../context/ApiStatusContext.jsx";
 
 const EMPTY_DB = {
+  engine: "sqlite",
   host: "",
-  port: 1433,
-  name: "",
+  port: 0,
+  name: "helix-sample.sqlite",
   user: "",
   password: "",
+  sslmode: "prefer",
   driver: "ODBC Driver 18 for SQL Server",
   trust_server_certificate: true,
   encrypt: true,
+  path: "",
 };
+
+const DB_ENGINES = [
+  { value: "sqlite", label: "SQLite (sample)" },
+  { value: "postgresql", label: "PostgreSQL" },
+  { value: "sqlserver", label: "SQL Server" },
+];
 
 const EMPTY_OPENROUTER = {
   site_url: "",
@@ -45,18 +55,8 @@ const EMPTY_CURSOR = {
   token_from_env: false,
 };
 
-const AGENT_LABELS = {
-  task_validator: "Task Validator",
-  solution_strategist: "Solution Strategist",
-  technical_architect: "Technical Architect",
-  code_builder: "Code Builder",
-  sql_guardian: "SQL Guardian",
-  implementation_auditor: "Implementation Auditor",
-  response_publisher: "Response Publisher",
-};
-
 const TABS = [
-  { id: "provider", label: "Provider" },
+  { id: "general", label: "General" },
   { id: "openrouter", label: "OpenRouter" },
   { id: "cursor", label: "Cursor" },
   { id: "sql", label: "SQL" },
@@ -73,9 +73,10 @@ const SERVICE_LABELS = {
 export default function SettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get("tab");
-  const activeSection = TABS.some((t) => t.id === tabParam)
-    ? tabParam
-    : "provider";
+  const normalizedTab = tabParam === "provider" ? "general" : tabParam;
+  const activeSection = TABS.some((t) => t.id === normalizedTab)
+    ? normalizedTab
+    : "general";
 
   const { health, summary, checking, checkConnection } = useApiStatus();
 
@@ -97,15 +98,34 @@ export default function SettingsPage() {
   const [error, setError] = useState(null);
   const [sectionErrors, setSectionErrors] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [agentNameById, setAgentNameById] = useState({});
+
+  function agentLabel(agentId) {
+    return agentNameById[agentId] || agentId.replace(/_/g, " ");
+  }
 
   function setActiveSection(id) {
-    setSearchParams(id === "provider" ? {} : { tab: id }, { replace: true });
+    setSearchParams(id === "general" ? {} : { tab: id }, { replace: true });
   }
 
   useEffect(() => {
     (async () => {
       const failures = [];
       let anyOk = false;
+
+      try {
+        const agents = await fetchAgents();
+        const map = {};
+        for (const a of agents || []) {
+          if (a?.id) map[a.id] = a.name || a.id;
+        }
+        setAgentNameById(map);
+        anyOk = true;
+      } catch (err) {
+        failures.push(
+          `Agents: ${err instanceof Error ? err.message : "Failed to load"}`,
+        );
+      }
 
       try {
         const dbData = await fetchDatabaseSettings();
@@ -137,7 +157,7 @@ export default function SettingsPage() {
         setProvider(providerData.provider || "openrouter");
         anyOk = true;
       } catch (err) {
-        failures.push(`Provider: ${err instanceof Error ? err.message : "Failed to load"}`);
+        failures.push(`General: ${err instanceof Error ? err.message : "Failed to load"}`);
       }
 
       setSectionErrors(failures);
@@ -200,8 +220,20 @@ export default function SettingsPage() {
     };
   }, [loading, cursorForm.token_configured]);
 
+  function defaultPortForEngine(engine) {
+    if (engine === "sqlserver") return 1433;
+    if (engine === "sqlite") return 0;
+    return 5432;
+  }
+
   function updateDbField(key, value) {
-    setDbForm((prev) => ({ ...prev, [key]: value }));
+    setDbForm((prev) => {
+      const next = { ...prev, [key]: value };
+      if (key === "engine") {
+        next.port = defaultPortForEngine(value);
+      }
+      return next;
+    });
     setConnectionStringDirty(false);
   }
 
@@ -262,7 +294,7 @@ export default function SettingsPage() {
         ? { connection_string: connectionString }
         : {
             ...dbForm,
-            port: Number(dbForm.port) || 1433,
+            port: Number(dbForm.port) || defaultPortForEngine(dbForm.engine),
           };
       const data = await saveDatabaseSettings(payload);
       setDbForm({ ...EMPTY_DB, ...data.database });
@@ -322,11 +354,11 @@ export default function SettingsPage() {
 
   const agentIds = Object.keys(orForm.agents || {}).length
     ? Object.keys(orForm.agents)
-    : Object.keys(AGENT_LABELS);
+    : Object.keys(agentNameById);
 
   const cursorAgentIds = Object.keys(cursorForm.agents || {}).length
     ? Object.keys(cursorForm.agents)
-    : Object.keys(AGENT_LABELS);
+    : Object.keys(agentNameById);
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden md:flex-row">
@@ -381,11 +413,14 @@ export default function SettingsPage() {
           </p>
         ) : null}
 
-      {activeSection === "provider" ? (
+      {activeSection === "general" ? (
         <section className="space-y-3 rounded-2xl border border-line/80 bg-paper/80 p-4 backdrop-blur-sm">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
-            Active LLM provider
+            General
           </h2>
+          <p className="text-sm text-muted">
+            Choose which LLM provider Helix uses for analysis runs.
+          </p>
           <div className="flex flex-wrap gap-2">
             {[
               { value: "openrouter", label: "OpenRouter" },
@@ -495,7 +530,7 @@ export default function SettingsPage() {
               {agentIds.map((agentId) => (
                 <Field
                   key={agentId}
-                  label={AGENT_LABELS[agentId] || agentId}
+                  label={agentLabel(agentId)}
                   id={`agent-${agentId}`}
                 >
                   <ModelCombobox
@@ -614,7 +649,7 @@ export default function SettingsPage() {
               {cursorAgentIds.map((agentId) => (
                 <Field
                   key={agentId}
-                  label={AGENT_LABELS[agentId] || agentId}
+                  label={agentLabel(agentId)}
                   id={`cursor-agent-${agentId}`}
                 >
                   <ModelCombobox
@@ -659,84 +694,145 @@ export default function SettingsPage() {
             SQL connection
           </h2>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Host" id="host">
-              <input
-                id="host"
-                value={dbForm.host}
-                onChange={(e) => updateDbField("host", e.target.value)}
-                className={inputClass}
-                placeholder="sql.example.com"
-              />
-            </Field>
-            <Field label="Port" id="port">
-              <input
-                id="port"
-                type="number"
-                value={dbForm.port}
-                onChange={(e) => updateDbField("port", e.target.value)}
-                className={inputClass}
-              />
-            </Field>
-            <Field label="Database" id="name">
-              <input
-                id="name"
-                value={dbForm.name}
-                onChange={(e) => updateDbField("name", e.target.value)}
-                className={inputClass}
-              />
-            </Field>
-            <Field label="Driver" id="driver">
-              <input
-                id="driver"
-                value={dbForm.driver}
-                onChange={(e) => updateDbField("driver", e.target.value)}
-                className={inputClass}
-              />
-            </Field>
-            <Field label="User" id="user">
-              <input
-                id="user"
-                value={dbForm.user}
-                onChange={(e) => updateDbField("user", e.target.value)}
-                className={inputClass}
-                autoComplete="off"
-              />
-            </Field>
-            <Field label="Password" id="password">
-              <input
-                id="password"
-                type="password"
-                value={dbForm.password}
-                onChange={(e) => updateDbField("password", e.target.value)}
-                className={inputClass}
-                autoComplete="new-password"
-              />
-            </Field>
-          </div>
+          <Field label="Engine" id="engine">
+            <select
+              id="engine"
+              value={dbForm.engine || "sqlite"}
+              onChange={(e) => updateDbField("engine", e.target.value)}
+              className={inputClass}
+            >
+              {DB_ENGINES.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </Field>
 
-          <div className="flex flex-wrap gap-4">
-            <label className="flex items-center gap-2 text-sm text-ink">
-              <input
-                type="checkbox"
-                checked={Boolean(dbForm.encrypt)}
-                onChange={(e) => updateDbField("encrypt", e.target.checked)}
-                className="size-4 rounded border-line text-moss"
-              />
-              Encrypt
-            </label>
-            <label className="flex items-center gap-2 text-sm text-ink">
-              <input
-                type="checkbox"
-                checked={Boolean(dbForm.trust_server_certificate)}
-                onChange={(e) =>
-                  updateDbField("trust_server_certificate", e.target.checked)
-                }
-                className="size-4 rounded border-line text-moss"
-              />
-              Trust server certificate
-            </label>
-          </div>
+          {dbForm.engine === "sqlite" ? (
+            <>
+              <Field label="Database file" id="name">
+                <input
+                  id="name"
+                  value={dbForm.name}
+                  onChange={(e) => updateDbField("name", e.target.value)}
+                  className={inputClass}
+                  placeholder="helix-sample.sqlite"
+                />
+              </Field>
+              <p className="text-xs text-muted">
+                Default <code className="text-ink">helix-sample.sqlite</code> is
+                created with Sales sample rows on API start for review and testing.
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Host" id="host">
+                  <input
+                    id="host"
+                    value={dbForm.host}
+                    onChange={(e) => updateDbField("host", e.target.value)}
+                    className={inputClass}
+                    placeholder={
+                      dbForm.engine === "postgresql"
+                        ? "127.0.0.1"
+                        : "sql.example.com"
+                    }
+                  />
+                </Field>
+                <Field label="Port" id="port">
+                  <input
+                    id="port"
+                    type="number"
+                    value={dbForm.port}
+                    onChange={(e) => updateDbField("port", e.target.value)}
+                    className={inputClass}
+                  />
+                </Field>
+                <Field
+                  label={dbForm.engine === "postgresql" ? "Database" : "Database"}
+                  id="name"
+                >
+                  <input
+                    id="name"
+                    value={dbForm.name}
+                    onChange={(e) => updateDbField("name", e.target.value)}
+                    className={inputClass}
+                  />
+                </Field>
+                {dbForm.engine === "postgresql" ? (
+                  <Field label="SSL mode" id="sslmode">
+                    <select
+                      id="sslmode"
+                      value={dbForm.sslmode || "prefer"}
+                      onChange={(e) => updateDbField("sslmode", e.target.value)}
+                      className={inputClass}
+                    >
+                      <option value="disable">disable</option>
+                      <option value="prefer">prefer</option>
+                      <option value="require">require</option>
+                      <option value="verify-ca">verify-ca</option>
+                      <option value="verify-full">verify-full</option>
+                    </select>
+                  </Field>
+                ) : (
+                  <Field label="Driver" id="driver">
+                    <input
+                      id="driver"
+                      value={dbForm.driver}
+                      onChange={(e) => updateDbField("driver", e.target.value)}
+                      className={inputClass}
+                    />
+                  </Field>
+                )}
+                <Field label="User" id="user">
+                  <input
+                    id="user"
+                    value={dbForm.user}
+                    onChange={(e) => updateDbField("user", e.target.value)}
+                    className={inputClass}
+                    autoComplete="off"
+                  />
+                </Field>
+                <Field label="Password" id="password">
+                  <input
+                    id="password"
+                    type="password"
+                    value={dbForm.password}
+                    onChange={(e) => updateDbField("password", e.target.value)}
+                    className={inputClass}
+                    autoComplete="new-password"
+                  />
+                </Field>
+              </div>
+
+              {dbForm.engine === "sqlserver" ? (
+                <div className="flex flex-wrap gap-4">
+                  <label className="flex items-center gap-2 text-sm text-ink">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(dbForm.encrypt)}
+                      onChange={(e) => updateDbField("encrypt", e.target.checked)}
+                      className="size-4 rounded border-line text-moss"
+                    />
+                    Encrypt
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-ink">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(dbForm.trust_server_certificate)}
+                      onChange={(e) =>
+                        updateDbField("trust_server_certificate", e.target.checked)
+                      }
+                      className="size-4 rounded border-line text-moss"
+                    />
+                    Trust server certificate
+                  </label>
+                </div>
+              ) : null}
+            </>
+          )}
 
           <div>
             <label htmlFor="conn" className="block text-sm font-medium text-ink">

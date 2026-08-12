@@ -3,6 +3,7 @@
 @theme {
   --font-sans: "Vazirmatn", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Vazirmatn", ui-sans-serif, system-ui, sans-serif;
+  --font-geek: "Share Tech Mono", ui-monospace, monospace;
   --color-ink: var(--hx-ink);
   --color-moss: var(--hx-moss);
   --color-moss-deep: var(--hx-moss-deep);

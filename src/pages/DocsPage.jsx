@@ -72,7 +72,7 @@ export default function DocsPage() {
   return (
     <div className="hx-rise flex h-full min-h-0 flex-col gap-2">
       <header className="shrink-0">
-        <h1 className="font-display text-xl text-ink sm:text-2xl">Docs</h1>
+        <h1 className="font-display text-xl text-ink sm:text-2xl">Table docs</h1>
         {source ? (
           <p className="text-sm text-muted">Source: {source}.</p>
         ) : null}
