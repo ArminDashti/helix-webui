@@ -6,6 +6,12 @@ import AgentsPage from "./pages/AgentsPage.jsx";
 import AnalysisPage from "./pages/AnalysisPage.jsx";
 import DbExplorerPage from "./pages/DbExplorerPage.jsx";
 import DocsPage from "./pages/DocsPage.jsx";
+import EditAgentPage from "./pages/EditAgentPage.jsx";
+import EditRulePage from "./pages/EditRulePage.jsx";
+import EditSkillPage from "./pages/EditSkillPage.jsx";
+import NewAgentPage from "./pages/NewAgentPage.jsx";
+import NewRulePage from "./pages/NewRulePage.jsx";
+import NewSkillPage from "./pages/NewSkillPage.jsx";
 import ResultsPage from "./pages/ResultsPage.jsx";
 import RulesPage from "./pages/RulesPage.jsx";
 import SettingsPage from "./pages/SettingsPage.jsx";
@@ -19,10 +25,17 @@ export default function App() {
           <Route element={<Layout />}>
             <Route index element={<AnalysisPage />} />
             <Route path="results" element={<ResultsPage />} />
+            <Route path="results/:resultId" element={<ResultsPage />} />
             <Route path="run" element={<Navigate to="/" replace />} />
             <Route path="rules" element={<RulesPage />} />
+            <Route path="rules/new" element={<NewRulePage />} />
+            <Route path="rules/:ruleId" element={<EditRulePage />} />
             <Route path="skills" element={<SkillsPage />} />
+            <Route path="skills/new" element={<NewSkillPage />} />
+            <Route path="skills/:scope/:skillId" element={<EditSkillPage />} />
             <Route path="agents" element={<AgentsPage />} />
+            <Route path="agents/new" element={<NewAgentPage />} />
+            <Route path="agents/:agentId" element={<EditAgentPage />} />
             <Route path="docs" element={<DocsPage />} />
             <Route path="db-explorer" element={<DbExplorerPage />} />
             <Route path="settings" element={<SettingsPage />} />

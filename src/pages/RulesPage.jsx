@@ -1,70 +1,34 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { Ban, Pencil, Plus, Scale, Trash2 } from "lucide-react";
 import {
-  createRule,
   deleteRule,
   fetchAgents,
   fetchRules,
-  renameRule,
   updateRule,
 } from "../api/client.js";
-import AgentScopedMarkdownPage from "../components/AgentScopedMarkdownPage.jsx";
+import DataGrid from "../components/DataGrid.jsx";
+import IconButton from "../components/IconButton.jsx";
+import PageHeader from "../components/PageHeader.jsx";
+import StackedNames from "../components/StackedNames.jsx";
 
-function isSharedRule(rule, agentIds) {
-  if (!agentIds.length) return false;
-  const assigned = rule.agents || [];
-  return agentIds.every((id) => assigned.includes(id));
-}
-
-function ruleScope(rule, agentIds) {
-  if (isSharedRule(rule, agentIds)) return "shared";
-  const assigned = rule.agents || [];
-  if (assigned.length === 1) return assigned[0];
-  return null;
+function agentLabels(rule, agents) {
+  const ids = rule.agents || [];
+  return ids.map((id) => agents.find((a) => a.id === id)?.name || id);
 }
 
 export default function RulesPage() {
+  const navigate = useNavigate();
   const [agents, setAgents] = useState([]);
   const [rules, setRules] = useState([]);
-  const [selectedScope, setSelectedScope] = useState(null);
-  const [selectedId, setSelectedId] = useState(null);
-  const [draft, setDraft] = useState("");
-  const [newId, setNewId] = useState("");
   const [status, setStatus] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const agentIds = useMemo(() => agents.map((a) => a.id), [agents]);
-
-  const scopedItems = useMemo(() => {
-    if (!selectedScope) return [];
-    return rules.filter((r) => ruleScope(r, agentIds) === selectedScope);
-  }, [rules, selectedScope, agentIds]);
-
-  const selected = useMemo(
-    () => scopedItems.find((r) => r.id === selectedId) || null,
-    [scopedItems, selectedId],
-  );
-
-  function pickFirst(list) {
-    return list[0]?.id || null;
-  }
-
-  async function reload(preferScope, preferId) {
+  async function reload() {
     const [a, r] = await Promise.all([fetchAgents(), fetchRules()]);
-    setAgents(a);
-    setRules(r);
-    const ids = a.map((x) => x.id);
-    const scope = preferScope || selectedScope || a[0]?.id || null;
-    setSelectedScope(scope);
-    const scoped = r.filter((rule) => ruleScope(rule, ids) === scope);
-    const id =
-      preferId ||
-      (scope === selectedScope && scoped.some((x) => x.id === selectedId)
-        ? selectedId
-        : null) ||
-      pickFirst(scoped);
-    setSelectedId(id);
-    setDraft(r.find((x) => x.id === id)?.content || "");
+    setAgents(a || []);
+    setRules(r || []);
   }
 
   useEffect(() => {
@@ -77,135 +41,130 @@ export default function RulesPage() {
         setLoading(false);
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function selectScope(scope) {
-    setSelectedScope(scope);
-    setStatus(null);
-    const scoped = rules.filter((r) => ruleScope(r, agentIds) === scope);
-    const id = pickFirst(scoped);
-    setSelectedId(id);
-    setDraft(scoped.find((r) => r.id === id)?.content || "");
-  }
+  const rows = useMemo(
+    () => rules.map((rule) => ({ key: rule.id, item: rule })),
+    [rules],
+  );
 
-  function selectItem(id) {
-    const rule = rules.find((r) => r.id === id);
-    setSelectedId(id);
-    setDraft(rule?.content || "");
-    setStatus(null);
-  }
-
-  async function handleCreate(event) {
-    event.preventDefault();
-    const id = newId.trim();
-    if (!id) {
-      setError("Enter a rule id.");
-      return;
-    }
-    if (!selectedScope) {
-      setError("Select an agent or Shared.");
-      return;
-    }
-    const assigned =
-      selectedScope === "shared" ? agentIds : [selectedScope];
+  async function handleDisable(rule) {
     setError(null);
     try {
-      const created = await createRule(id, "# New rule\n\n", assigned);
-      setRules((prev) =>
-        [...prev, created].sort((a, b) => a.id.localeCompare(b.id)),
+      const updated = await updateRule(rule.id, { disabled: !rule.disabled });
+      setRules((prev) => prev.map((r) => (r.id === rule.id ? updated : r)));
+      setStatus(
+        updated.disabled ? `Disabled ${updated.id}` : `Enabled ${updated.id}`,
       );
-      setNewId("");
-      setSelectedId(created.id);
-      setDraft(created.content);
-      setStatus(`Created ${created.filename}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Create failed");
+      setError(err instanceof Error ? err.message : "Update failed");
     }
   }
 
-  async function handleSave() {
-    if (!selected) return;
+  async function handleDelete(rule) {
+    if (!window.confirm(`Delete rule ${rule.id}?`)) return;
     setError(null);
     try {
-      const updated = await updateRule(selected.id, {
-        content: draft,
-        agents: selected.agents || [],
-      });
-      setRules((prev) => prev.map((r) => (r.id === selected.id ? updated : r)));
-      setStatus("Rule saved.");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Save failed");
-    }
-  }
-
-  async function handleDelete() {
-    if (!selected) return;
-    if (!window.confirm(`Delete rule ${selected.id}?`)) return;
-    setError(null);
-    try {
-      await deleteRule(selected.id);
-      const next = rules.filter((r) => r.id !== selected.id);
-      setRules(next);
-      const scoped = next.filter((r) => ruleScope(r, agentIds) === selectedScope);
-      const id = pickFirst(scoped);
-      setSelectedId(id);
-      setDraft(scoped.find((r) => r.id === id)?.content || "");
+      await deleteRule(rule.id);
+      setRules((prev) => prev.filter((r) => r.id !== rule.id));
       setStatus("Rule deleted.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Delete failed");
     }
   }
 
+  const columns = [
+    {
+      key: "id",
+      label: "ID",
+      render: (rule) => (
+        <span className="font-mono text-[13px]">{rule.id}</span>
+      ),
+    },
+    {
+      key: "name",
+      label: "Name",
+      render: (rule) => rule.name || rule.id,
+    },
+    {
+      key: "agents",
+      label: "Agents",
+      render: (rule) => <StackedNames items={agentLabels(rule, agents)} />,
+    },
+    {
+      key: "edit",
+      label: "Edit",
+      render: (rule) => (
+        <IconButton
+          type="button"
+          icon={Pencil}
+          onClick={() => navigate(`/rules/${encodeURIComponent(rule.id)}`)}
+          className="rounded-lg border border-line bg-fog px-2 py-1.5 text-xs font-medium hover:bg-fog/80"
+        >
+          Edit
+        </IconButton>
+      ),
+    },
+    {
+      key: "disable",
+      label: "Disable",
+      render: (rule) => (
+        <IconButton
+          type="button"
+          icon={Ban}
+          onClick={() => handleDisable(rule)}
+          className="rounded-lg border border-line bg-fog px-2 py-1.5 text-xs font-medium hover:bg-fog/80"
+        >
+          {rule.disabled ? "Enable" : "Disable"}
+        </IconButton>
+      ),
+    },
+    {
+      key: "delete",
+      label: "Delete",
+      render: (rule) => (
+        <IconButton
+          type="button"
+          icon={Trash2}
+          onClick={() => handleDelete(rule)}
+          className="rounded-lg border border-warn-border bg-warn-bg px-2 py-1.5 text-xs font-medium text-warn hover:opacity-90"
+        >
+          Delete
+        </IconButton>
+      ),
+    },
+  ];
 
-  async function handleRename(nextId) {
-    if (!selected) return;
-    const next =
-      typeof nextId === "string"
-        ? nextId.trim()
-        : (window.prompt("Rename rule", selected.id) || "").trim();
-    if (!next || next === selected.id) return;
-    setError(null);
-    try {
-      const updated = await renameRule(selected.id, next);
-      await reload(selectedScope, updated.id);
-      setStatus(`Renamed to ${updated.id}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Rename failed");
-    }
+  if (loading) {
+    return <p className="text-sm text-muted">Loading rules…</p>;
   }
 
   return (
-    <AgentScopedMarkdownPage
-      agents={agents}
-      selectedScope={selectedScope}
-      onSelectScope={selectScope}
-      items={scopedItems}
-      selectedId={selectedId}
-      onSelectItem={selectItem}
-      itemsTitle="Rules"
-      editorTitle={
-        selected
-          ? `${selectedScope === "shared" ? "shared" : selectedScope} / ${selected.id}`
-          : "Select a rule"
-      }
-      draft={draft}
-      onDraftChange={setDraft}
-      onSave={handleSave}
-      onDelete={handleDelete}
-      onRenameItem={handleRename}
-      newId={newId}
-      onNewIdChange={setNewId}
-      onCreate={handleCreate}
-      createPlaceholder="my-custom-rule"
-      createLabel="Create rule"
-      createInputId="rule-id"
-      createInputLabel=""
-      status={status}
-      error={error}
-      loading={loading}
-      loadingLabel="Loading rules…"
-      textareaRows={16}
-    />
+    <div className="flex h-full min-h-0 flex-col gap-2">
+      <PageHeader
+        icon={Scale}
+        title="Rules"
+        actions={
+          <Link
+            to="/rules/new"
+            className="inline-flex items-center gap-2 rounded-xl bg-moss px-4 py-2 text-sm font-semibold text-white hover:bg-moss-deep"
+          >
+            <Plus className="size-4 shrink-0" aria-hidden="true" />
+            New rule
+          </Link>
+        }
+      />
+      {error ? (
+        <p className="shrink-0 rounded-xl border border-warn-border bg-warn-bg px-4 py-2 text-sm text-warn">
+          {error}
+        </p>
+      ) : null}
+      {status ? (
+        <p className="shrink-0 rounded-xl border border-line bg-paper/80 px-4 py-2 text-sm text-moss">
+          {status}
+        </p>
+      ) : null}
+      <DataGrid columns={columns} rows={rows} emptyLabel="No rules" />
+    </div>
   );
 }

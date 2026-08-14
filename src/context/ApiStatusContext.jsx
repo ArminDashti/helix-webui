@@ -53,6 +53,17 @@ export function ApiStatusProvider({ children }) {
 
   useEffect(() => {
     checkConnection({ silent: false });
+    const interval = window.setInterval(() => {
+      checkConnection({ silent: true });
+    }, 15000);
+    function onFocus() {
+      checkConnection({ silent: true });
+    }
+    window.addEventListener("focus", onFocus);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+    };
   }, [checkConnection]);
 
   const value = useMemo(

@@ -1,6 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import ReactECharts from "echarts-for-react";
+import {
+  Archive,
+  ArchiveRestore,
+  ArrowLeft,
+  FileDown,
+  History,
+  Pencil,
+  Play,
+  Plus,
+} from "lucide-react";
+import {
+  fetchResult,
+  fetchResults,
+  setResultArchived,
+} from "../api/client.js";
+import IconButton from "../components/IconButton.jsx";
+import PageHeader from "../components/PageHeader.jsx";
 import { hasPersianScript } from "../utils/textDirection.js";
 
 const DARK_CHART_DEFAULTS = {
@@ -145,29 +162,175 @@ function normalizeMode(mode) {
   return mode || "auto";
 }
 
-export default function ResultsPage() {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const { prompt, mode, language: stateLanguage, result } = location.state || {};
-  const chartRef = useRef(null);
-  const [editing, setEditing] = useState(false);
-  const [editedPrompt, setEditedPrompt] = useState(prompt || "");
-  const [editedReport, setEditedReport] = useState(result?.text_report || "");
+function formatWhen(iso) {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return date.toLocaleString();
+}
+
+function ResultRow({ item, onArchive, archiveLabel }) {
+  return (
+    <li>
+      <div className="flex items-stretch gap-2">
+        <Link
+          to={`/results/${item.id}`}
+          className="min-w-0 flex-1 rounded-xl border border-line bg-fog/40 px-3 py-2 text-left hover:bg-fog"
+        >
+          <span className="block truncate text-sm font-medium text-ink">
+            {item.prompt || "(no prompt)"}
+          </span>
+          <span className="mt-0.5 block text-[11px] text-muted">
+            {formatWhen(item.created_at)}
+            {item.mode ? ` · ${item.mode}` : ""}
+          </span>
+        </Link>
+        <IconButton
+          type="button"
+          icon={archiveLabel === "Restore" ? ArchiveRestore : Archive}
+          onClick={() => onArchive(item)}
+          className="shrink-0 rounded-xl border border-line bg-paper px-3 py-2 text-xs font-medium text-ink hover:bg-fog"
+        >
+          {archiveLabel}
+        </IconButton>
+      </div>
+    </li>
+  );
+}
+
+function ResultsList() {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  async function load() {
+    const data = await fetchResults();
+    setItems(data);
+  }
 
   useEffect(() => {
-    if (!result) {
-      navigate("/", { replace: true });
+    (async () => {
+      try {
+        await load();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load results");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  async function toggleArchive(item, archived) {
+    setError(null);
+    try {
+      await setResultArchived(item.id, archived);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update result");
     }
-  }, [result, navigate]);
+  }
+
+  const history = items.filter((item) => !item.archived);
+  const archive = items.filter((item) => item.archived);
+
+  if (loading) {
+    return <p className="text-sm text-muted">Loading results…</p>;
+  }
+
+  return (
+    <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto">
+      <PageHeader icon={Play} title="Results">
+        <p className="mt-0.5 text-sm text-muted">
+          History of analysis runs and archived reports.
+        </p>
+      </PageHeader>
+      {error ? (
+        <p className="rounded-xl border border-warn-border bg-warn-bg px-4 py-2 text-sm text-warn">
+          {error}
+        </p>
+      ) : null}
+      <section className="space-y-2 rounded-2xl border border-line/80 bg-paper/80 p-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
+          History
+        </h2>
+        {history.length === 0 ? (
+          <p className="text-sm text-muted">No results yet. Run an analysis to add one.</p>
+        ) : (
+          <ul className="space-y-2">
+            {history.map((item) => (
+              <ResultRow
+                key={item.id}
+                item={item}
+                archiveLabel="Archive"
+                onArchive={(row) => toggleArchive(row, true)}
+              />
+            ))}
+          </ul>
+        )}
+      </section>
+      <section className="space-y-2 rounded-2xl border border-line/80 bg-paper/80 p-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
+          Archive
+        </h2>
+        {archive.length === 0 ? (
+          <p className="text-sm text-muted">No archived results.</p>
+        ) : (
+          <ul className="space-y-2">
+            {archive.map((item) => (
+              <ResultRow
+                key={item.id}
+                item={item}
+                archiveLabel="Restore"
+                onArchive={(row) => toggleArchive(row, false)}
+              />
+            ))}
+          </ul>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function ResultDetail({ resultId }) {
+  const chartRef = useRef(null);
+  const [record, setRecord] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [editing, setEditing] = useState(false);
+  const [editedPrompt, setEditedPrompt] = useState("");
+  const [editedReport, setEditedReport] = useState("");
 
   useEffect(() => {
-    setEditedPrompt(prompt || "");
-    setEditedReport(result?.text_report || "");
-    setEditing(false);
-  }, [prompt, result]);
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await fetchResult(resultId);
+        if (cancelled) return;
+        setRecord(data);
+        setEditedPrompt(data.prompt || "");
+        setEditedReport(data.payload?.text_report || "");
+        setEditing(false);
+      } catch (err) {
+        if (!cancelled) {
+          setRecord(null);
+          setError(err instanceof Error ? err.message : "Failed to load result");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [resultId]);
+
+  const result = record?.payload;
+  const mode = record?.mode;
+  const language = result?.language || record?.language || "en";
 
   const effectiveMode = normalizeMode(result?.mode || mode);
-  const language = result?.language || stateLanguage || "en";
   const showChart =
     Boolean(result) &&
     (effectiveMode === "chart" ||
@@ -193,41 +356,50 @@ export default function ResultsPage() {
   const reportDir = resolveDir(language, editedReport || result?.text_report);
   const reportLang = reportDir === "rtl" ? "fa" : "en";
 
-  if (!result) {
-    return null;
+  if (loading) {
+    return <p className="text-sm text-muted">Loading result…</p>;
+  }
+
+  if (error || !record || !result) {
+    return (
+      <div className="space-y-3">
+        <PageHeader icon={Play} title="Results" backTo="/results" />
+        <p className="rounded-xl border border-warn-border bg-warn-bg px-4 py-2 text-sm text-warn">
+          {error || "Result not found."}
+        </p>
+        <Link
+          to="/results"
+          className="inline-flex items-center gap-2 rounded-xl border border-line bg-paper px-4 py-2 text-sm font-medium text-ink hover:bg-fog"
+        >
+          <ArrowLeft className="size-4 shrink-0" aria-hidden="true" />
+          Back to results
+        </Link>
+      </div>
+    );
   }
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto">
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <h1 className="font-display text-2xl text-ink sm:text-3xl">Results</h1>
-          {editing ? (
-            <textarea
-              value={editedPrompt}
-              onChange={(e) => setEditedPrompt(e.target.value)}
-              rows={2}
-              className="mt-1 w-full max-w-2xl resize-y rounded-xl border border-line bg-paper px-3 py-2 text-sm text-ink outline-none focus:border-moss focus:ring-2 focus:ring-moss/30"
-            />
-          ) : (
-            <p className="mt-0.5 max-w-2xl text-sm text-muted line-clamp-2">
-              {editedPrompt}
-            </p>
-          )}
-        </div>
-        <div className="flex flex-wrap gap-2">
+      <PageHeader
+        icon={Play}
+        title="Results"
+        backTo="/results"
+        actions={
+          <>
           {showText ? (
-            <button
+            <IconButton
               type="button"
+              icon={Pencil}
               onClick={() => setEditing((v) => !v)}
               className="rounded-xl border border-line bg-paper px-4 py-2 text-sm font-medium text-ink hover:bg-fog"
             >
               {editing ? "Done" : "Edit"}
-            </button>
+            </IconButton>
           ) : null}
           {showChart || showText || showGrid ? (
-            <button
+            <IconButton
               type="button"
+              icon={FileDown}
               onClick={() =>
                 exportResultPdf({
                   prompt: editedPrompt,
@@ -243,16 +415,38 @@ export default function ResultsPage() {
               className="rounded-xl border border-line bg-paper px-4 py-2 text-sm font-medium text-ink hover:bg-fog"
             >
               Export PDF
-            </button>
+            </IconButton>
           ) : null}
           <Link
-            to="/"
-            className="rounded-xl border border-line bg-paper px-4 py-2 text-sm font-medium text-ink hover:bg-fog"
+            to="/results"
+            className="inline-flex items-center gap-2 rounded-xl border border-line bg-paper px-4 py-2 text-sm font-medium text-ink hover:bg-fog"
           >
+            <History className="size-4 shrink-0" aria-hidden="true" />
+            History
+          </Link>
+          <Link
+            to="/"
+            className="inline-flex items-center gap-2 rounded-xl border border-line bg-paper px-4 py-2 text-sm font-medium text-ink hover:bg-fog"
+          >
+            <Plus className="size-4 shrink-0" aria-hidden="true" />
             New prompt
           </Link>
-        </div>
-      </div>
+          </>
+        }
+      >
+          {editing ? (
+            <textarea
+              value={editedPrompt}
+              onChange={(e) => setEditedPrompt(e.target.value)}
+              rows={2}
+              className="mt-1 w-full max-w-2xl resize-y rounded-xl border border-line bg-paper px-3 py-2 text-sm text-ink outline-none focus:border-moss focus:ring-2 focus:ring-moss/30"
+            />
+          ) : (
+            <p className="mt-0.5 max-w-2xl text-sm text-muted line-clamp-2">
+              {editedPrompt}
+            </p>
+          )}
+      </PageHeader>
 
       <section className="space-y-3" aria-live="polite">
         {showChart ? (
@@ -342,4 +536,10 @@ export default function ResultsPage() {
       </section>
     </div>
   );
+}
+
+export default function ResultsPage() {
+  const { resultId } = useParams();
+  if (resultId) return <ResultDetail resultId={resultId} />;
+  return <ResultsList />;
 }

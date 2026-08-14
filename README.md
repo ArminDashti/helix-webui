@@ -26,5 +26,5 @@ Optional: copy `.env.example` to `.env` and set `VITE_API_BASE_URL` for an absol
 | `/instructions` | Per-agent instructions + reference `.md` files (Source/Preview) |
 | `/rules` | Rules + which agents use them (Source/Preview) |
 | `/skills` | Skills browser (Source/Preview) |
-| `/settings` | SQL Server + OpenRouter model settings (searchable model catalog) |
+| `/settings` | SQL Server + LLM provider, API keys, and models |
 | `/admin` | Redirects to `/settings` |

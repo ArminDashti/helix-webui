@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
 import {
+  Database,
+  RefreshCw,
+  Save,
+  Settings as SettingsIcon,
+} from "lucide-react";
+import {
   fetchAgents,
   fetchCursorModels,
   fetchCursorSettings,
@@ -13,7 +19,9 @@ import {
   saveOpenRouterSettings,
   saveProvider,
 } from "../api/client.js";
+import IconButton from "../components/IconButton.jsx";
 import ModelCombobox from "../components/ModelCombobox.jsx";
+import PageHeader from "../components/PageHeader.jsx";
 import { useApiStatus } from "../context/ApiStatusContext.jsx";
 
 const EMPTY_DB = {
@@ -31,63 +39,55 @@ const EMPTY_DB = {
 };
 
 const DB_ENGINES = [
-  { value: "sqlite", label: "SQLite (sample)" },
+  { value: "sqlite", label: "AdventureWorks" },
   { value: "postgresql", label: "PostgreSQL" },
   { value: "sqlserver", label: "SQL Server" },
 ];
 
 const EMPTY_OPENROUTER = {
-  site_url: "",
+  token: "",
   app_name: "Helix",
   default_model: "openai/gpt-4o-mini",
   agents: {},
   token_configured: false,
-  token_hint: "",
-  token_from_env: false,
 };
 
 const EMPTY_CURSOR = {
+  token: "",
   app_name: "Helix",
   default_model: "composer-2",
   agents: {},
   token_configured: false,
-  token_hint: "",
-  token_from_env: false,
 };
 
 const TABS = [
-  { id: "general", label: "General" },
-  { id: "openrouter", label: "OpenRouter" },
-  { id: "cursor", label: "Cursor" },
-  { id: "sql", label: "SQL" },
-  { id: "connection", label: "Connection" },
+  { id: "llm", label: "LLM" },
+  { id: "database", label: "Database" },
 ];
 
-const SERVICE_LABELS = {
-  api: "helix-api",
-  database: "Database",
-  openrouter: "OpenRouter",
-  cursor: "Cursor",
+const TAB_ALIASES = {
+  general: "llm",
+  provider: "llm",
+  openrouter: "llm",
+  cursor: "llm",
+  sql: "database",
+  connection: "llm",
 };
 
 export default function SettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get("tab");
-  const normalizedTab = tabParam === "provider" ? "general" : tabParam;
-  const activeSection = TABS.some((t) => t.id === normalizedTab)
-    ? normalizedTab
-    : "general";
-
-  const { health, summary, checking, checkConnection } = useApiStatus();
+  const requestedTab = TAB_ALIASES[tabParam] || tabParam;
+  const activeSection = TABS.some((t) => t.id === requestedTab)
+    ? requestedTab
+    : "llm";
 
   const [dbForm, setDbForm] = useState(EMPTY_DB);
   const [connectionString, setConnectionString] = useState("");
   const [connectionStringDirty, setConnectionStringDirty] = useState(false);
   const [provider, setProvider] = useState("openrouter");
   const [orForm, setOrForm] = useState(EMPTY_OPENROUTER);
-  const [orApiKey, setOrApiKey] = useState("");
   const [cursorForm, setCursorForm] = useState(EMPTY_CURSOR);
-  const [cursorApiKey, setCursorApiKey] = useState("");
   const [models, setModels] = useState([]);
   const [cursorModels, setCursorModels] = useState([]);
   const [modelsLoading, setModelsLoading] = useState(false);
@@ -99,13 +99,14 @@ export default function SettingsPage() {
   const [sectionErrors, setSectionErrors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [agentNameById, setAgentNameById] = useState({});
+  const { checkConnection } = useApiStatus();
 
   function agentLabel(agentId) {
     return agentNameById[agentId] || agentId.replace(/_/g, " ");
   }
 
   function setActiveSection(id) {
-    setSearchParams(id === "general" ? {} : { tab: id }, { replace: true });
+    setSearchParams(id === "llm" ? {} : { tab: id }, { replace: true });
   }
 
   useEffect(() => {
@@ -133,12 +134,14 @@ export default function SettingsPage() {
         setConnectionString(dbData.connection_string || "");
         anyOk = true;
       } catch (err) {
-        failures.push(`SQL: ${err instanceof Error ? err.message : "Failed to load"}`);
+        failures.push(
+          `Database: ${err instanceof Error ? err.message : "Failed to load"}`,
+        );
       }
 
       try {
         const orData = await fetchOpenRouterSettings();
-        setOrForm({ ...EMPTY_OPENROUTER, ...orData.openrouter });
+        setOrForm({ ...EMPTY_OPENROUTER, ...orData.openrouter, token: "" });
         anyOk = true;
       } catch (err) {
         failures.push(`OpenRouter: ${err instanceof Error ? err.message : "Failed to load"}`);
@@ -146,7 +149,7 @@ export default function SettingsPage() {
 
       try {
         const cursorData = await fetchCursorSettings();
-        setCursorForm({ ...EMPTY_CURSOR, ...cursorData.cursor });
+        setCursorForm({ ...EMPTY_CURSOR, ...cursorData.cursor, token: "" });
         anyOk = true;
       } catch (err) {
         failures.push(`Cursor: ${err instanceof Error ? err.message : "Failed to load"}`);
@@ -157,7 +160,7 @@ export default function SettingsPage() {
         setProvider(providerData.provider || "openrouter");
         anyOk = true;
       } catch (err) {
-        failures.push(`General: ${err instanceof Error ? err.message : "Failed to load"}`);
+        failures.push(`LLM: ${err instanceof Error ? err.message : "Failed to load"}`);
       }
 
       setSectionErrors(failures);
@@ -231,6 +234,9 @@ export default function SettingsPage() {
       const next = { ...prev, [key]: value };
       if (key === "engine") {
         next.port = defaultPortForEngine(value);
+        if (value === "sqlite") {
+          next.name = "helix-sample.sqlite";
+        }
       }
       return next;
     });
@@ -258,6 +264,7 @@ export default function SettingsPage() {
       const data = await saveProvider(next);
       setProvider(data.provider || next);
       setStatus(`Active provider: ${data.provider || next}`);
+      checkConnection({ silent: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to set provider");
     }
@@ -273,13 +280,13 @@ export default function SettingsPage() {
         default_model: cursorForm.default_model,
         agents: cursorForm.agents,
       };
-      if (cursorApiKey.trim()) {
-        payload.api_key = cursorApiKey.trim();
+      if (cursorForm.token?.trim()) {
+        payload.token = cursorForm.token.trim();
       }
       const data = await saveCursorSettings(payload);
-      setCursorForm({ ...EMPTY_CURSOR, ...data.cursor });
-      setCursorApiKey("");
+      setCursorForm({ ...EMPTY_CURSOR, ...data.cursor, token: "" });
       setStatus("Cursor API settings saved.");
+      checkConnection({ silent: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
     }
@@ -292,7 +299,9 @@ export default function SettingsPage() {
     try {
       const payload = connectionStringDirty
         ? { connection_string: connectionString }
-        : {
+        : dbForm.engine === "sqlite"
+          ? { engine: "sqlite", name: "helix-sample.sqlite" }
+          : {
             ...dbForm,
             port: Number(dbForm.port) || defaultPortForEngine(dbForm.engine),
           };
@@ -300,7 +309,8 @@ export default function SettingsPage() {
       setDbForm({ ...EMPTY_DB, ...data.database });
       setConnectionString(data.connection_string || "");
       setConnectionStringDirty(false);
-      setStatus("SQL settings saved to helix.config.yaml.");
+      setStatus("Database settings saved to helix.config.yaml.");
+      checkConnection({ silent: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
     }
@@ -312,18 +322,17 @@ export default function SettingsPage() {
     setStatus(null);
     try {
       const payload = {
-        site_url: orForm.site_url,
         app_name: orForm.app_name,
         default_model: orForm.default_model,
         agents: orForm.agents,
       };
-      if (orApiKey.trim()) {
-        payload.api_key = orApiKey.trim();
+      if (orForm.token?.trim()) {
+        payload.token = orForm.token.trim();
       }
       const data = await saveOpenRouterSettings(payload);
-      setOrForm({ ...EMPTY_OPENROUTER, ...data.openrouter });
-      setOrApiKey("");
+      setOrForm({ ...EMPTY_OPENROUTER, ...data.openrouter, token: "" });
       setStatus("OpenRouter settings saved to helix.config.yaml.");
+      checkConnection({ silent: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
     }
@@ -361,21 +370,21 @@ export default function SettingsPage() {
     : Object.keys(agentNameById);
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden md:flex-row">
+    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
+      <PageHeader icon={SettingsIcon} title="Settings" />
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
       <aside className="flex shrink-0 flex-col gap-2 border-b border-line/80 bg-paper/50 p-2 md:w-1/4 md:min-w-[10rem] md:max-w-[16rem] md:border-b-0 md:border-r">
-        <header className="shrink-0 px-1 pt-1">
-          <h1 className="font-display text-lg text-ink sm:text-xl">Settings</h1>
-        </header>
         <nav
           className="flex gap-1 overflow-x-auto md:min-h-0 md:flex-1 md:flex-col md:overflow-y-auto md:overflow-x-hidden"
           role="tablist"
           aria-label="Settings categories"
         >
           {TABS.map((tab) => (
-            <button
+            <IconButton
               key={tab.id}
               type="button"
               role="tab"
+              icon={tab.id === "database" ? Database : SettingsIcon}
               aria-selected={activeSection === tab.id}
               onClick={() => setActiveSection(tab.id)}
               className={[
@@ -386,7 +395,7 @@ export default function SettingsPage() {
               ].join(" ")}
             >
               {tab.label}
-            </button>
+            </IconButton>
           ))}
         </nav>
       </aside>
@@ -413,22 +422,25 @@ export default function SettingsPage() {
           </p>
         ) : null}
 
-      {activeSection === "general" ? (
+      {activeSection === "llm" ? (
+        <>
         <section className="space-y-3 rounded-2xl border border-line/80 bg-paper/80 p-4 backdrop-blur-sm">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
-            General
+            LLM
           </h2>
           <p className="text-sm text-muted">
-            Choose which LLM provider Helix uses for analysis runs.
+            Choose which LLM provider Helix uses for analysis runs, then
+            configure OpenRouter and Cursor.
           </p>
           <div className="flex flex-wrap gap-2">
             {[
               { value: "openrouter", label: "OpenRouter" },
               { value: "cursor", label: "Cursor API" },
             ].map((opt) => (
-              <button
+              <IconButton
                 key={opt.value}
                 type="button"
+                icon={SettingsIcon}
                 onClick={() => handleProviderChange(opt.value)}
                 className={[
                   "rounded-xl px-4 py-2 text-sm font-medium transition",
@@ -438,13 +450,11 @@ export default function SettingsPage() {
                 ].join(" ")}
               >
                 {opt.label}
-              </button>
+              </IconButton>
             ))}
           </div>
         </section>
-      ) : null}
 
-      {activeSection === "openrouter" ? (
         <form
           onSubmit={handleSaveOpenRouter}
           className="space-y-3 rounded-2xl border border-line/80 bg-paper/80 p-4 backdrop-blur-sm"
@@ -453,39 +463,33 @@ export default function SettingsPage() {
             <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
               OpenRouter
             </h2>
-            <button
+            <IconButton
               type="button"
+              icon={RefreshCw}
               onClick={refreshModels}
               disabled={modelsLoading || !orForm.token_configured}
               className="rounded-lg border border-line bg-fog px-3 py-1.5 text-xs font-medium hover:bg-fog/80 disabled:opacity-50"
             >
               Refresh models
-            </button>
+            </IconButton>
           </div>
 
-          <Field label="API key" id="openrouter_api_key">
+          <Field label="API key" id="openrouter_token">
             <input
-              id="openrouter_api_key"
+              id="openrouter_token"
               type="password"
-              value={orApiKey}
-              onChange={(e) => setOrApiKey(e.target.value)}
+              autoComplete="off"
+              value={orForm.token || ""}
+              onChange={(e) => updateOrField("token", e.target.value)}
               className={inputClass}
-              autoComplete="new-password"
-              placeholder={
-                orForm.token_configured
-                  ? orForm.token_from_env
-                    ? `Configured via env (${orForm.token_hint || "••••"})`
-                    : `Configured (${orForm.token_hint || "••••"}) — enter to replace`
-                  : "Enter OpenRouter API key"
-              }
+              placeholder={orForm.token_configured ? "Saved on the API host" : "Paste API key"}
+              spellCheck={false}
             />
           </Field>
           <p className="text-xs text-muted">
             {orForm.token_configured
-              ? orForm.token_from_env
-                ? "Using OPENROUTER_TOKEN from the environment (overrides saved key)."
-                : "Key is saved in helix.config.yaml."
-              : "No key configured yet."}
+              ? "An API key is saved on the API host. Paste a new key to replace it."
+              : "Paste the OpenRouter API key here. It is saved on the API host, not in the browser."}
           </p>
 
           {modelsError ? (
@@ -513,15 +517,6 @@ export default function SettingsPage() {
                 className={inputClass}
               />
             </Field>
-            <Field label="Site URL" id="site_url">
-              <input
-                id="site_url"
-                value={orForm.site_url}
-                onChange={(e) => updateOrField("site_url", e.target.value)}
-                className={inputClass}
-                placeholder="https://example.com"
-              />
-            </Field>
           </div>
 
           <div>
@@ -546,16 +541,15 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <button
+          <IconButton
             type="submit"
+            icon={Save}
             className="rounded-xl bg-moss px-5 py-2.5 text-sm font-semibold text-white hover:bg-moss-deep"
           >
             Save OpenRouter
-          </button>
+          </IconButton>
         </form>
-      ) : null}
 
-      {activeSection === "cursor" ? (
         <form
           onSubmit={handleSaveCursor}
           className="space-y-3 rounded-2xl border border-line/80 bg-paper/80 p-4 backdrop-blur-sm"
@@ -564,8 +558,9 @@ export default function SettingsPage() {
             <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
               Cursor API (SDK)
             </h2>
-            <button
+            <IconButton
               type="button"
+              icon={RefreshCw}
               onClick={async () => {
                 setCursorModelsLoading(true);
                 setCursorModelsError(null);
@@ -584,32 +579,29 @@ export default function SettingsPage() {
               className="rounded-lg border border-line bg-fog px-3 py-1.5 text-xs font-medium hover:bg-fog/80 disabled:opacity-50"
             >
               Refresh models
-            </button>
+            </IconButton>
           </div>
 
-          <Field label="API key" id="cursor_api_key">
+          <Field label="API key" id="cursor_token">
             <input
-              id="cursor_api_key"
+              id="cursor_token"
               type="password"
-              value={cursorApiKey}
-              onChange={(e) => setCursorApiKey(e.target.value)}
-              className={inputClass}
-              autoComplete="new-password"
-              placeholder={
-                cursorForm.token_configured
-                  ? cursorForm.token_from_env
-                    ? `Configured via env (${cursorForm.token_hint || "••••"})`
-                    : `Configured (${cursorForm.token_hint || "••••"}) — enter to replace`
-                  : "Enter Cursor API key"
+              autoComplete="off"
+              value={cursorForm.token || ""}
+              onChange={(e) =>
+                setCursorForm((prev) => ({ ...prev, token: e.target.value }))
               }
+              className={inputClass}
+              placeholder={
+                cursorForm.token_configured ? "Saved on the API host" : "Paste API key"
+              }
+              spellCheck={false}
             />
           </Field>
           <p className="text-xs text-muted">
             {cursorForm.token_configured
-              ? cursorForm.token_from_env
-                ? "Using CURSOR_API_KEY from the environment (overrides saved key)."
-                : "Key is saved in helix.config.yaml."
-              : "No key configured yet."}
+              ? "An API key is saved on the API host. Paste a new key to replace it."
+              : "Paste the Cursor API key here. It is saved on the API host, not in the browser."}
           </p>
 
           {cursorModelsError ? (
@@ -676,22 +668,24 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <button
+          <IconButton
             type="submit"
+            icon={Save}
             className="rounded-xl bg-moss px-5 py-2.5 text-sm font-semibold text-white hover:bg-moss-deep"
           >
             Save Cursor API
-          </button>
+          </IconButton>
         </form>
+        </>
       ) : null}
 
-      {activeSection === "sql" ? (
+      {activeSection === "database" ? (
         <form
           onSubmit={handleSaveDatabase}
           className="space-y-3 rounded-2xl border border-line/80 bg-paper/80 p-4 backdrop-blur-sm"
         >
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
-            SQL connection
+            Database
           </h2>
 
           <Field label="Engine" id="engine">
@@ -710,21 +704,9 @@ export default function SettingsPage() {
           </Field>
 
           {dbForm.engine === "sqlite" ? (
-            <>
-              <Field label="Database file" id="name">
-                <input
-                  id="name"
-                  value={dbForm.name}
-                  onChange={(e) => updateDbField("name", e.target.value)}
-                  className={inputClass}
-                  placeholder="helix-sample.sqlite"
-                />
-              </Field>
-              <p className="text-xs text-muted">
-                Default <code className="text-ink">helix-sample.sqlite</code> is
-                created with Sales sample rows on API start for review and testing.
-              </p>
-            </>
+            <p className="text-sm text-muted">
+              AdventureWorks LT is the default database and is loaded automatically.
+            </p>
           ) : (
             <>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -854,74 +836,16 @@ export default function SettingsPage() {
             </p>
           </div>
 
-          <button
+          <IconButton
             type="submit"
+            icon={Save}
             className="rounded-xl bg-moss px-5 py-2.5 text-sm font-semibold text-white hover:bg-moss-deep"
           >
-            Save SQL
-          </button>
+            Save Database
+          </IconButton>
         </form>
       ) : null}
-
-      {activeSection === "connection" ? (
-        <section className="space-y-3 rounded-2xl border border-line/80 bg-paper/80 p-4 backdrop-blur-sm">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
-              API connection
-            </h2>
-            <button
-              type="button"
-              onClick={() => checkConnection({ silent: false })}
-              disabled={checking}
-              className="rounded-xl bg-moss px-4 py-2 text-sm font-semibold text-white hover:bg-moss-deep disabled:opacity-50"
-            >
-              {checking ? "Checking…" : "Check connection"}
-            </button>
-          </div>
-
-          <p className="text-sm text-ink">
-            Overall:{" "}
-            <span className="font-medium capitalize">
-              {checking ? "checking" : summary}
-            </span>
-          </p>
-
-          <ul className="space-y-2">
-            {["api", "database", "openrouter", "cursor"].map((key) => {
-              const entry = health?.[key] || {
-                status: summary === "disconnected" ? "disconnected" : "unknown",
-              };
-              const okish =
-                entry.status === "connected" || entry.status === "configured";
-              return (
-                <li
-                  key={key}
-                  className={[
-                    "rounded-xl border px-4 py-3 text-sm",
-                    okish
-                      ? "border-line bg-fog/40"
-                      : "border-warn-border bg-warn-bg",
-                  ].join(" ")}
-                >
-                  <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <span className="font-medium text-ink">
-                      {SERVICE_LABELS[key] || key}
-                    </span>
-                    <span
-                      className={okish ? "text-moss" : "text-warn"}
-                    >
-                      {entry.status || "unknown"}
-                    </span>
-                  </div>
-                  {entry.detail ? (
-                    <p className="mt-1 text-xs text-muted">{entry.detail}</p>
-                  ) : null}
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      ) : null}
+      </div>
       </div>
     </div>
   );

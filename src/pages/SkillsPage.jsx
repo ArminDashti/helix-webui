@@ -1,50 +1,34 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { Ban, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import {
-  createSkill,
   deleteSkill,
   fetchAgents,
   fetchSkills,
-  renameSkill,
   updateSkill,
 } from "../api/client.js";
-import AgentScopedMarkdownPage from "../components/AgentScopedMarkdownPage.jsx";
+import DataGrid from "../components/DataGrid.jsx";
+import IconButton from "../components/IconButton.jsx";
+import PageHeader from "../components/PageHeader.jsx";
+import StackedNames from "../components/StackedNames.jsx";
+
+function agentLabels(skill, agents) {
+  const ids = skill.agents || [];
+  return ids.map((id) => agents.find((a) => a.id === id)?.name || id);
+}
 
 export default function SkillsPage() {
+  const navigate = useNavigate();
   const [agents, setAgents] = useState([]);
   const [skills, setSkills] = useState([]);
-  const [selectedScope, setSelectedScope] = useState(null);
-  const [selectedId, setSelectedId] = useState(null);
-  const [draft, setDraft] = useState("");
-  const [newId, setNewId] = useState("");
   const [status, setStatus] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const scopedItems = useMemo(
-    () => skills.filter((s) => s.scope === selectedScope),
-    [skills, selectedScope],
-  );
-
-  const selected = useMemo(
-    () => scopedItems.find((s) => s.id === selectedId) || null,
-    [scopedItems, selectedId],
-  );
-
-  function pickFirstInScope(list, scope) {
-    const first = list.find((s) => s.scope === scope);
-    return first ? first.id : null;
-  }
-
-  async function reload(preferScope, preferId) {
+  async function reload() {
     const [a, s] = await Promise.all([fetchAgents(), fetchSkills()]);
-    setAgents(a);
-    setSkills(s);
-    const scope = preferScope || selectedScope || a[0]?.id || null;
-    setSelectedScope(scope);
-    const id = preferId || (scope === selectedScope ? selectedId : null) || pickFirstInScope(s, scope);
-    setSelectedId(id);
-    const skill = s.find((x) => x.scope === scope && x.id === id);
-    setDraft(skill?.content || "");
+    setAgents(a || []);
+    setSkills(s || []);
   }
 
   useEffect(() => {
@@ -57,138 +41,146 @@ export default function SkillsPage() {
         setLoading(false);
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function selectScope(scope) {
-    setSelectedScope(scope);
-    setStatus(null);
-    const id = pickFirstInScope(skills, scope);
-    setSelectedId(id);
-    const skill = skills.find((s) => s.scope === scope && s.id === id);
-    setDraft(skill?.content || "");
-  }
+  const rows = useMemo(
+    () =>
+      skills.map((skill) => ({
+        key: `${skill.scope}/${skill.id}`,
+        item: skill,
+      })),
+    [skills],
+  );
 
-  function selectItem(id) {
-    const skill = skills.find((s) => s.scope === selectedScope && s.id === id);
-    setSelectedId(id);
-    setDraft(skill?.content || "");
-    setStatus(null);
-  }
-
-  async function handleCreate(event) {
-    event.preventDefault();
-    const id = newId.trim();
-    if (!id) {
-      setError("Enter a skill id.");
-      return;
-    }
-    if (!selectedScope) {
-      setError("Select an agent or Shared.");
-      return;
-    }
+  async function handleDisable(skill) {
     setError(null);
     try {
-      const created = await createSkill(
-        id,
-        selectedScope,
-        "---\nname: " + id + "\ndescription: \n---\n\n# " + id + "\n\n",
-      );
-      setSkills((prev) =>
-        [...prev, created].sort((a, b) =>
-          `${a.scope}/${a.id}`.localeCompare(`${b.scope}/${b.id}`),
-        ),
-      );
-      setNewId("");
-      setSelectedId(created.id);
-      setDraft(created.content);
-      setStatus(`Created ${created.scope}/${created.id}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Create failed");
-    }
-  }
-
-  async function handleSave() {
-    if (!selected) return;
-    setError(null);
-    try {
-      const updated = await updateSkill(selected.scope, selected.id, draft);
+      const updated = await updateSkill(skill.scope, skill.id, {
+        disabled: !skill.disabled,
+      });
       setSkills((prev) =>
         prev.map((s) =>
-          s.scope === selected.scope && s.id === selected.id ? updated : s,
+          s.scope === skill.scope && s.id === skill.id ? updated : s,
         ),
       );
-      setStatus("Skill saved.");
+      setStatus(
+        updated.disabled
+          ? `Disabled ${updated.id}`
+          : `Enabled ${updated.id}`,
+      );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Save failed");
+      setError(err instanceof Error ? err.message : "Update failed");
     }
   }
 
-  async function handleDelete() {
-    if (!selected) return;
-    if (!window.confirm(`Delete skill ${selected.scope}/${selected.id}?`)) return;
+  async function handleDelete(skill) {
+    if (!window.confirm(`Delete skill ${skill.id}?`)) return;
     setError(null);
     try {
-      await deleteSkill(selected.scope, selected.id);
-      const next = skills.filter(
-        (s) => !(s.scope === selected.scope && s.id === selected.id),
+      await deleteSkill(skill.scope, skill.id);
+      setSkills((prev) =>
+        prev.filter((s) => !(s.scope === skill.scope && s.id === skill.id)),
       );
-      setSkills(next);
-      const id = pickFirstInScope(next, selectedScope);
-      setSelectedId(id);
-      setDraft(next.find((s) => s.scope === selectedScope && s.id === id)?.content || "");
       setStatus("Skill deleted.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Delete failed");
     }
   }
 
+  const columns = [
+    {
+      key: "id",
+      label: "ID",
+      render: (skill) => (
+        <span className="font-mono text-[13px]">{skill.id}</span>
+      ),
+    },
+    {
+      key: "name",
+      label: "Name",
+      render: (skill) => skill.name || skill.id,
+    },
+    {
+      key: "agents",
+      label: "Agents",
+      render: (skill) => <StackedNames items={agentLabels(skill, agents)} />,
+    },
+    {
+      key: "edit",
+      label: "Edit",
+      render: (skill) => (
+        <IconButton
+          type="button"
+          icon={Pencil}
+          onClick={() =>
+            navigate(`/skills/${encodeURIComponent(skill.scope)}/${encodeURIComponent(skill.id)}`)
+          }
+          className="rounded-lg border border-line bg-fog px-2 py-1.5 text-xs font-medium hover:bg-fog/80"
+        >
+          Edit
+        </IconButton>
+      ),
+    },
+    {
+      key: "disable",
+      label: "Disable",
+      render: (skill) => (
+        <IconButton
+          type="button"
+          icon={Ban}
+          onClick={() => handleDisable(skill)}
+          className="rounded-lg border border-line bg-fog px-2 py-1.5 text-xs font-medium hover:bg-fog/80"
+        >
+          {skill.disabled ? "Enable" : "Disable"}
+        </IconButton>
+      ),
+    },
+    {
+      key: "delete",
+      label: "Delete",
+      render: (skill) => (
+        <IconButton
+          type="button"
+          icon={Trash2}
+          onClick={() => handleDelete(skill)}
+          className="rounded-lg border border-warn-border bg-warn-bg px-2 py-1.5 text-xs font-medium text-warn hover:opacity-90"
+        >
+          Delete
+        </IconButton>
+      ),
+    },
+  ];
 
-  async function handleRename(nextId) {
-    if (!selected || !selectedScope) return;
-    const next =
-      typeof nextId === "string"
-        ? nextId.trim()
-        : (window.prompt("Rename skill", selected.id) || "").trim();
-    if (!next || next === selected.id) return;
-    setError(null);
-    try {
-      const updated = await renameSkill(selectedScope, selected.id, next);
-      await reload(selectedScope, updated.id);
-      setStatus(`Renamed to ${updated.id}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Rename failed");
-    }
+  if (loading) {
+    return <p className="text-sm text-muted">Loading skills…</p>;
   }
 
   return (
-    <AgentScopedMarkdownPage
-      agents={agents}
-      selectedScope={selectedScope}
-      onSelectScope={selectScope}
-      items={scopedItems}
-      selectedId={selectedId}
-      onSelectItem={selectItem}
-      itemsTitle="Skills"
-      editorTitle={
-        selected ? `${selected.scope} / ${selected.id}` : "Select a skill"
-      }
-      draft={draft}
-      onDraftChange={setDraft}
-      onSave={handleSave}
-      onDelete={handleDelete}
-      onRenameItem={handleRename}
-      newId={newId}
-      onNewIdChange={setNewId}
-      onCreate={handleCreate}
-      createPlaceholder="my-skill"
-      createLabel="Create skill"
-      createInputId="skill-id"
-      createInputLabel=""
-      status={status}
-      error={error}
-      loading={loading}
-      loadingLabel="Loading skills…"
-    />
+    <div className="flex h-full min-h-0 flex-col gap-2">
+      <PageHeader
+        icon={Sparkles}
+        title="Skills"
+        actions={
+          <Link
+            to="/skills/new"
+            className="inline-flex items-center gap-2 rounded-xl bg-moss px-4 py-2 text-sm font-semibold text-white hover:bg-moss-deep"
+          >
+            <Plus className="size-4 shrink-0" aria-hidden="true" />
+            New skill
+          </Link>
+        }
+      />
+      {error ? (
+        <p className="shrink-0 rounded-xl border border-warn-border bg-warn-bg px-4 py-2 text-sm text-warn">
+          {error}
+        </p>
+      ) : null}
+      {status ? (
+        <p className="shrink-0 rounded-xl border border-line bg-paper/80 px-4 py-2 text-sm text-moss">
+          {status}
+        </p>
+      ) : null}
+      <DataGrid columns={columns} rows={rows} emptyLabel="No skills" />
+    </div>
   );
 }

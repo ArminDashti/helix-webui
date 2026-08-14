@@ -165,6 +165,14 @@ export async function renameAgent(agentId, name) {
   });
 }
 
+export async function setAgentDisabled(agentId, disabled) {
+  return requestJson(`/api/agents/${encodeURIComponent(agentId)}/`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ disabled }),
+  });
+}
+
 export async function updateAgentInstruction(agentId, instruction) {
   return requestJson(
     `/api/agents/${encodeURIComponent(agentId)}/instruction/`,
@@ -210,19 +218,19 @@ export async function fetchRules() {
   return data.rules;
 }
 
-export async function createRule(id, content = "", agents = []) {
+export async function createRule(id, { content = "", agents = [], name = "", disabled = false } = {}) {
   return requestJson("/api/rules/", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id, content, agents }),
+    body: JSON.stringify({ id, content, agents, name, disabled }),
   });
 }
 
-export async function updateRule(id, { content, agents }) {
+export async function updateRule(id, { content, agents, name, disabled }) {
   return requestJson(`/api/rules/${encodeURIComponent(id)}/`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content, agents }),
+    body: JSON.stringify({ content, agents, name, disabled }),
   });
 }
 
@@ -248,21 +256,28 @@ export async function fetchSkills(scope) {
   return data.skills;
 }
 
-export async function createSkill(id, scope, content = "") {
+export async function createSkill({
+  id,
+  scope,
+  content = "",
+  agents = [],
+  name = "",
+  disabled = false,
+}) {
   return requestJson("/api/skills/", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id, scope, content }),
+    body: JSON.stringify({ id, scope, content, agents, name, disabled }),
   });
 }
 
-export async function updateSkill(scope, id, content) {
+export async function updateSkill(scope, id, { content, agents, name, disabled }) {
   return requestJson(
     `/api/skills/${encodeURIComponent(scope)}/${encodeURIComponent(id)}/`,
     {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content, agents, name, disabled }),
     },
   );
 }
@@ -379,6 +394,39 @@ export async function fetchDocsTables() {
 
 export async function fetchDocsTable(table) {
   return requestJson(`/api/docs/tables/${encodeURIComponent(table)}/`);
+}
+
+export async function saveDocsTableOverview(table, overview) {
+  return requestJson(`/api/docs/tables/${encodeURIComponent(table)}/`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ overview }),
+  });
+}
+
+export async function fetchResults() {
+  const data = await requestJson("/api/results/");
+  return data.results || [];
+}
+
+export async function fetchResult(resultId) {
+  return requestJson(`/api/results/${encodeURIComponent(resultId)}/`);
+}
+
+export async function createResult(payload) {
+  return requestJson("/api/results/", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function setResultArchived(resultId, archived) {
+  return requestJson(`/api/results/${encodeURIComponent(resultId)}/`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ archived }),
+  });
 }
 
 export async function fetchDbExplorerTables() {

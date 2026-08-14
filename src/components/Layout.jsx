@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
-import { Link, NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet } from "react-router-dom";
 import {
   BarChart3,
   Bot,
   Database,
   Monitor,
   Moon,
+  PanelLeftClose,
+  PanelLeftOpen,
   Play,
   Scale,
   Settings,
@@ -15,6 +17,7 @@ import {
   User,
 } from "lucide-react";
 import { useApiStatus } from "../context/ApiStatusContext.jsx";
+import IconButton from "./IconButton.jsx";
 
 const NAV_STORAGE_KEY = "helix-nav-collapsed";
 const THEME_STORAGE_KEY = "helix-theme";
@@ -40,37 +43,31 @@ const THEME_OPTIONS = [
   { value: "system", label: "System theme", icon: Monitor },
 ];
 
-function statusDotClass(status) {
-  if (status === "connected" || status === "configured") return "bg-moss";
-  if (status === "not_configured" || status === "missing_token") return "bg-ink/50";
-  if (!status) return "bg-muted";
-  return "bg-warn";
-}
-
-function isOnlineStatus(status) {
+function isConnectedStatus(status) {
   return status === "connected" || status === "configured";
 }
 
-function formatServiceStatus(status, checking) {
+function formatLinkStatus(status, checking) {
   if (checking && !status) return "Checking…";
-  if (!status) return "Offline";
-  return isOnlineStatus(status) ? "Online" : "Offline";
+  return isConnectedStatus(status) ? "Connected" : "Disconnected";
 }
 
-function StatusDot({ status, label, checking }) {
-  const state = formatServiceStatus(status, checking);
+function StatusLine({ status, label, checking }) {
+  const state = formatLinkStatus(status, checking);
+  const connected = isConnectedStatus(status);
   const title = `${label} ${state}`;
   return (
-    <span className="inline-flex items-center gap-1.5 font-geek tracking-wide" title={title}>
-      <span className="text-muted">{label}</span>
+    <>
+      <span className="text-start text-muted" title={title}>
+        {label}
+      </span>
       <span
-        className={`inline-block size-2 shrink-0 rounded-full ${statusDotClass(status)}`}
-        aria-label={title}
-      />
-      <span className={isOnlineStatus(status) ? "text-moss" : "text-muted"}>
+        className={`text-start ${connected ? "text-moss" : "text-danger"}`}
+        title={title}
+      >
         {state}
       </span>
-    </span>
+    </>
   );
 }
 
@@ -157,8 +154,10 @@ export default function Layout() {
     return () => media.removeEventListener("change", onChange);
   }, [theme]);
 
-  const apiStatus = health?.api?.status;
+  const engineStatus = health?.api?.status;
   const dbStatus = health?.database?.status;
+  const providerKey = health?.provider === "cursor" ? "cursor" : "openrouter";
+  const llmStatus = health?.[providerKey]?.status;
 
   return (
     <div className="flex h-dvh overflow-hidden">
@@ -201,15 +200,16 @@ export default function Layout() {
           ) : null}
         </div>
 
-        <button
+        <IconButton
           type="button"
+          icon={collapsed ? PanelLeftOpen : PanelLeftClose}
           onClick={() => setCollapsed((v) => !v)}
           className="mb-1 rounded-lg border border-line/80 bg-fog/40 px-2 py-1.5 text-xs font-medium text-ink hover:bg-fog"
           aria-label={collapsed ? "Expand menu" : "Collapse menu"}
           title={collapsed ? "Expand menu" : "Collapse menu"}
         >
-          {collapsed ? "»" : "« Menu"}
-        </button>
+          {collapsed ? null : "Menu"}
+        </IconButton>
 
         {MAIN_LINKS.map((link) => (
           <NavItem key={link.to} link={link} collapsed={collapsed} />
@@ -220,34 +220,46 @@ export default function Layout() {
             <NavItem key={link.to} link={link} collapsed={collapsed} />
           ))}
 
-          <Link
-            to="/settings?tab=connection"
-            title="Open Settings → Connection"
+          <div
             className={[
-              "block w-full rounded-xl border border-line/80 bg-fog/40 text-left text-[11px] font-medium transition hover:bg-fog",
+              "block w-full rounded-xl border border-line/80 bg-fog/40 text-left text-[11px] font-medium",
               collapsed ? "px-0 py-2 text-center" : "px-3 py-2",
             ].join(" ")}
+            aria-label="LLM, Engine, and Database status"
           >
             {collapsed ? (
               <span className="inline-flex flex-col items-center gap-1.5 font-geek leading-none tracking-wide">
-                <span
-                  className={`inline-block size-2 rounded-full ${statusDotClass(apiStatus)}`}
-                  title={`API ${formatServiceStatus(apiStatus, checking)}`}
-                  aria-label={`API ${formatServiceStatus(apiStatus, checking)}`}
-                />
-                <span
-                  className={`inline-block size-2 rounded-full ${statusDotClass(dbStatus)}`}
-                  title={`DB ${formatServiceStatus(dbStatus, checking)}`}
-                  aria-label={`DB ${formatServiceStatus(dbStatus, checking)}`}
-                />
+                {[
+                  ["LLM", llmStatus],
+                  ["Engine", engineStatus],
+                  ["Database", dbStatus],
+                ].map(([label, status]) => (
+                  <span
+                    key={label}
+                    className={`inline-block size-2 rounded-full ${
+                      isConnectedStatus(status) ? "bg-moss" : "bg-danger"
+                    }`}
+                    title={`${label} ${formatLinkStatus(status, checking)}`}
+                    aria-label={`${label} ${formatLinkStatus(status, checking)}`}
+                  />
+                ))}
               </span>
             ) : (
-              <span className="flex flex-col gap-1.5">
-                <StatusDot status={apiStatus} label="API" checking={checking} />
-                <StatusDot status={dbStatus} label="DB" checking={checking} />
+              <span className="grid w-full grid-cols-[auto_1fr] items-baseline gap-x-2 gap-y-1 font-geek tracking-wide">
+                <StatusLine status={llmStatus} label="LLM" checking={checking} />
+                <StatusLine
+                  status={engineStatus}
+                  label="Engine"
+                  checking={checking}
+                />
+                <StatusLine
+                  status={dbStatus}
+                  label="Database"
+                  checking={checking}
+                />
               </span>
             )}
-          </Link>
+          </div>
 
           <div
             className={[
@@ -281,6 +293,18 @@ export default function Layout() {
               );
             })}
           </div>
+          {collapsed ? (
+            <p
+              className="rounded-xl border border-line/80 bg-fog/40 px-1 py-1.5 text-center text-[11px] font-medium leading-tight text-muted"
+              title="Created by Armin and Cursor"
+            >
+              A+C
+            </p>
+          ) : (
+            <p className="rounded-xl border border-line/80 bg-fog/40 px-2 py-1.5 text-center text-sm leading-snug text-muted">
+              Created by Armin and Cursor
+            </p>
+          )}
         </div>
       </nav>
       <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto p-2 sm:p-3">
