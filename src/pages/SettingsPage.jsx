@@ -19,9 +19,11 @@ import {
   saveOpenRouterSettings,
   saveProvider,
 } from "../api/client.js";
+import FlashMessage from "../components/FlashMessage.jsx";
 import IconButton from "../components/IconButton.jsx";
 import ModelCombobox from "../components/ModelCombobox.jsx";
 import PageHeader from "../components/PageHeader.jsx";
+import useFlash from "../lib/useFlash.js";
 import { useApiStatus } from "../context/ApiStatusContext.jsx";
 
 const EMPTY_DB = {
@@ -94,7 +96,7 @@ export default function SettingsPage() {
   const [cursorModelsLoading, setCursorModelsLoading] = useState(false);
   const [modelsError, setModelsError] = useState(null);
   const [cursorModelsError, setCursorModelsError] = useState(null);
-  const [status, setStatus] = useState(null);
+  const [status, setStatus] = useFlash();
   const [error, setError] = useState(null);
   const [sectionErrors, setSectionErrors] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -416,11 +418,7 @@ export default function SettingsPage() {
             </ul>
           </div>
         ) : null}
-        {status ? (
-          <p className="shrink-0 rounded-xl border border-line bg-paper/80 px-4 py-2 text-sm text-moss">
-            {status}
-          </p>
-        ) : null}
+        <FlashMessage message={status} />
 
       {activeSection === "llm" ? (
         <>

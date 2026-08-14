@@ -14,6 +14,7 @@
   --color-warn: var(--hx-warn);
   --color-warn-bg: var(--hx-warn-bg);
   --color-warn-border: var(--hx-warn-border);
+  --color-danger: var(--hx-danger);
 }
 
 :root,
@@ -29,6 +30,7 @@
   --hx-warn: #c4a574;
   --hx-warn-bg: #2a2620;
   --hx-warn-border: #4a4030;
+  --hx-danger: #e05555;
   --hx-bg-a: #1e1e1e;
   --hx-bg-b: #161616;
   --hx-bg-c: #141414;
@@ -46,6 +48,7 @@
   --hx-warn: #8a6a2f;
   --hx-warn-bg: #f5eedc;
   --hx-warn-border: #d9c49a;
+  --hx-danger: #c23030;
   --hx-bg-a: #dfece6;
   --hx-bg-b: #edf3f0;
   --hx-bg-c: #f7faf8;

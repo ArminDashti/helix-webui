@@ -1,3 +1,6 @@
+import { X } from "lucide-react";
+import IconButton from "./IconButton.jsx";
+
 /**
  * Modal for varied API failures (network, HTTP, parse, stream).
  */
@@ -39,13 +42,14 @@ export default function ErrorModal({ error, onDismiss }) {
         </div>
 
         <footer className="flex shrink-0 justify-end border-t border-line/80 px-4 py-3">
-          <button
+          <IconButton
             type="button"
+            icon={X}
             onClick={onDismiss}
             className="rounded-xl border border-line bg-fog px-4 py-2 text-sm font-medium text-ink hover:bg-fog/80"
           >
             Close
-          </button>
+          </IconButton>
         </footer>
       </div>
     </div>

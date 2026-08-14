@@ -1,10 +1,17 @@
 import { useEffect, useState } from "react";
+import { Code2, Eye, Pencil, Save, Trash2 } from "lucide-react";
 import { renderMarkdownToHtml } from "../lib/markdownPreview.js";
+import FlashMessage from "./FlashMessage.jsx";
+import IconButton from "./IconButton.jsx";
+import PageHeader from "./PageHeader.jsx";
 
 /**
  * Shared three-pane shell: agents (+ Shared below) | item list | markdown editor.
  */
 export default function AgentScopedMarkdownPage({
+  pageTitle,
+  pageIcon,
+  headerActions,
   agents,
   selectedScope,
   onSelectScope,
@@ -23,7 +30,7 @@ export default function AgentScopedMarkdownPage({
   onRenameItem,
   canDelete = true,
   canRename = true,
-  showCreate = true,
+  showCreate = false,
   newId,
   onNewIdChange,
   onCreate,
@@ -62,16 +69,19 @@ export default function AgentScopedMarkdownPage({
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
+      {pageTitle ? (
+        <PageHeader
+          icon={pageIcon}
+          title={pageTitle}
+          actions={headerActions}
+        />
+      ) : null}
       {error ? (
         <p className="shrink-0 rounded-xl border border-warn-border bg-warn-bg px-4 py-2 text-sm text-warn">
           {error}
         </p>
       ) : null}
-      {status ? (
-        <p className="shrink-0 rounded-xl border border-line bg-paper/80 px-4 py-2 text-sm text-moss">
-          {status}
-        </p>
-      ) : null}
+      <FlashMessage message={status} />
 
       {showCreate ? (
         <form
@@ -229,9 +239,10 @@ export default function AgentScopedMarkdownPage({
                 role="tablist"
                 aria-label="Editor mode"
               >
-                <button
+                <IconButton
                   type="button"
                   role="tab"
+                  icon={Code2}
                   aria-selected={viewMode === "source"}
                   onClick={() => setViewMode("source")}
                   className={[
@@ -242,10 +253,11 @@ export default function AgentScopedMarkdownPage({
                   ].join(" ")}
                 >
                   Source
-                </button>
-                <button
+                </IconButton>
+                <IconButton
                   type="button"
                   role="tab"
+                  icon={Eye}
                   aria-selected={viewMode === "preview"}
                   onClick={() => setViewMode("preview")}
                   className={[
@@ -256,35 +268,38 @@ export default function AgentScopedMarkdownPage({
                   ].join(" ")}
                 >
                   Preview
-                </button>
+                </IconButton>
               </div>
-              <button
+              <IconButton
                 type="button"
+                icon={Save}
                 onClick={onSave}
                 disabled={!selectedId}
                 className="rounded-xl bg-moss px-4 py-2 text-sm font-semibold text-white hover:bg-moss-deep disabled:opacity-50"
               >
                 Save
-              </button>
+              </IconButton>
               {canRename && onRenameItem ? (
-                <button
+                <IconButton
                   type="button"
+                  icon={Pencil}
                   onClick={() => onRenameItem()}
                   disabled={!selectedId}
                   className="rounded-xl border border-line bg-fog px-4 py-2 text-sm hover:bg-fog/80 disabled:opacity-50"
                 >
                   Rename
-                </button>
+                </IconButton>
               ) : null}
               {canDelete ? (
-                <button
+                <IconButton
                   type="button"
+                  icon={Trash2}
                   onClick={onDelete}
                   disabled={!selectedId}
                   className="rounded-xl border border-line bg-fog px-4 py-2 text-sm hover:bg-fog/80 disabled:opacity-50"
                 >
                   Delete
-                </button>
+                </IconButton>
               ) : null}
             </div>
           </div>

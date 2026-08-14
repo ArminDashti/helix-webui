@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Ban, Bot, LayoutList, Network, Pencil, Plus, Trash2 } from "lucide-react";
+import { Ban, Bot, LayoutList, ListTree, Network, Pencil, Plus, Trash2 } from "lucide-react";
 import {
   deleteAgent,
   fetchAgents,
@@ -8,10 +8,12 @@ import {
   fetchSkills,
   setAgentDisabled,
 } from "../api/client.js";
-import AgentGraphDesigner from "../components/AgentGraphDesigner.jsx";
+import PipelineDesigner from "../components/PipelineDesigner.jsx";
 import DataGrid from "../components/DataGrid.jsx";
+import FlashMessage from "../components/FlashMessage.jsx";
 import IconButton from "../components/IconButton.jsx";
 import PageHeader from "../components/PageHeader.jsx";
+import useFlash from "../lib/useFlash.js";
 import StackedNames from "../components/StackedNames.jsx";
 
 function namesForAgent(agentId, items) {
@@ -27,7 +29,7 @@ export default function AgentsPage() {
   const [skills, setSkills] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [status, setStatus] = useState(null);
+  const [status, setStatus] = useFlash();
   const [view, setView] = useState("list");
 
   async function reload() {
@@ -170,7 +172,8 @@ export default function AgentsPage() {
             >
               {[
                 { id: "list", label: "List", icon: LayoutList },
-                { id: "arrange", label: "Arrange", icon: Network },
+                { id: "arrange", label: "Arrange", icon: ListTree },
+                { id: "graph", label: "Graph", icon: Network },
               ].map((tab) => (
                 <IconButton
                   key={tab.id}
@@ -207,16 +210,20 @@ export default function AgentsPage() {
           {error}
         </p>
       ) : null}
-      {status && view === "list" ? (
-        <p className="shrink-0 rounded-xl border border-line bg-paper/80 px-4 py-2 text-sm text-moss">
-          {status}
-        </p>
-      ) : null}
-      {view === "arrange" ? (
-        <AgentGraphDesigner agents={agents} />
-      ) : (
+      {view === "list" ? <FlashMessage message={status} /> : null}
+      {view === "list" ? (
         <DataGrid columns={columns} rows={rows} emptyLabel="No agents" />
-      )}
+      ) : null}
+      <div
+        className={
+          view === "list" ? "hidden" : "flex min-h-0 flex-1 flex-col"
+        }
+      >
+        <PipelineDesigner
+          agents={agents}
+          mode={view === "list" ? "arrange" : view}
+        />
+      </div>
     </div>
   );
 }

@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchDocsTable, fetchDocsTables } from "../api/client.js";
+import { Save, Table2 } from "lucide-react";
+import { fetchDocsTable, fetchDocsTables, saveDocsTableOverview } from "../api/client.js";
+import IconButton from "../components/IconButton.jsx";
+import PageHeader from "../components/PageHeader.jsx";
 
 export default function DocsPage() {
   const [tables, setTables] = useState([]);
-  const [source, setSource] = useState("");
   const [selected, setSelected] = useState(null);
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -11,13 +13,15 @@ export default function DocsPage() {
   const [error, setError] = useState(null);
   const [listError, setListError] = useState(null);
   const [tableFilter, setTableFilter] = useState("");
+  const [overviewDraft, setOverviewDraft] = useState("");
+  const [overviewDirty, setOverviewDirty] = useState(false);
+  const [savingOverview, setSavingOverview] = useState(false);
 
   useEffect(() => {
     (async () => {
       try {
         const data = await fetchDocsTables();
         setTables(data.tables || []);
-        setSource(data.source || "");
         setListError(data.error || null);
         const first = data.tables?.[0]?.full_name;
         if (first) setSelected(first);
@@ -40,7 +44,11 @@ export default function DocsPage() {
       setError(null);
       try {
         const data = await fetchDocsTable(selected);
-        if (!cancelled) setDetail(data);
+        if (!cancelled) {
+          setDetail(data);
+          setOverviewDraft(data.overview || "");
+          setOverviewDirty(false);
+        }
       } catch (err) {
         if (!cancelled) {
           setDetail(null);
@@ -71,12 +79,7 @@ export default function DocsPage() {
 
   return (
     <div className="hx-rise flex h-full min-h-0 flex-col gap-2">
-      <header className="shrink-0">
-        <h1 className="font-display text-xl text-ink sm:text-2xl">Table docs</h1>
-        {source ? (
-          <p className="text-sm text-muted">Source: {source}.</p>
-        ) : null}
-      </header>
+      <PageHeader icon={Table2} title="Table docs" />
 
       {listError ? (
         <p className="shrink-0 rounded-xl border border-warn-border bg-warn-bg px-4 py-2 text-sm text-warn">
@@ -91,10 +94,7 @@ export default function DocsPage() {
 
       <div className="grid min-h-0 flex-1 gap-2 lg:grid-cols-[minmax(22rem,32rem)_1fr]">
         <aside className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-line/80 bg-paper/80 p-2">
-          <p className="px-2 text-xs font-semibold uppercase tracking-wide text-muted">
-            Tables
-          </p>
-          <label className="mt-1 block px-1">
+          <label className="block px-1">
             <span className="sr-only">Filter tables</span>
             <input
               type="search"
@@ -148,17 +148,52 @@ export default function DocsPage() {
           ) : (
             <div className="space-y-4">
               <div>
-                <h2 className="font-display text-lg text-ink">{detail.full_name}</h2>
-                {detail.kind ? (
-                  <p className="text-xs uppercase tracking-wide text-muted">{detail.kind}</p>
-                ) : null}
-              </div>
-              <div>
                 <h3 className="mb-1 text-sm font-semibold text-ink">Overview</h3>
-                <p className="text-sm leading-relaxed text-ink/90">
-                  {detail.overview ||
-                    "No overview yet. Add a description in references/tables.md or SQL extended properties."}
-                </p>
+                <textarea
+                  value={overviewDraft}
+                  onChange={(e) => {
+                    setOverviewDraft(e.target.value);
+                    setOverviewDirty(true);
+                  }}
+                  rows={5}
+                  placeholder="Write an explanation for this table…"
+                  className="w-full resize-y rounded-xl border border-line bg-fog/40 px-3 py-2 text-sm leading-relaxed text-ink outline-none focus:border-moss focus:ring-2 focus:ring-moss/30"
+                />
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <IconButton
+                    type="button"
+                    icon={Save}
+                    disabled={savingOverview || !overviewDirty}
+                    onClick={async () => {
+                      if (!selected) return;
+                      setSavingOverview(true);
+                      setError(null);
+                      try {
+                        const data = await saveDocsTableOverview(
+                          selected,
+                          overviewDraft,
+                        );
+                        setDetail(data);
+                        setOverviewDraft(data.overview || "");
+                        setOverviewDirty(false);
+                      } catch (err) {
+                        setError(
+                          err instanceof Error
+                            ? err.message
+                            : "Failed to save explanation",
+                        );
+                      } finally {
+                        setSavingOverview(false);
+                      }
+                    }}
+                    className="rounded-xl bg-moss px-4 py-2 text-sm font-semibold text-white hover:bg-moss-deep disabled:opacity-50"
+                  >
+                    {savingOverview ? "Saving…" : "Save explanation"}
+                  </IconButton>
+                  {overviewDirty ? (
+                    <span className="text-xs text-muted">Unsaved changes</span>
+                  ) : null}
+                </div>
               </div>
               <div>
                 <h3 className="mb-2 text-sm font-semibold text-ink">Columns</h3>

@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { fetchAgents, streamRun } from "../api/client.js";
+import { BarChart3, Play } from "lucide-react";
+import { fetchAgents, streamRun, createResult } from "../api/client.js";
+import IconButton from "../components/IconButton.jsx";
+import PageHeader from "../components/PageHeader.jsx";
 import RunProgressModal from "../components/RunProgressModal.jsx";
 import {
   parseColumns,
@@ -139,17 +142,13 @@ export default function AnalysisPage() {
       }, controller.signal);
       setModalOpen(false);
       setRunning(false);
-      navigate("/results", {
-        state: {
-          prompt: trimmed,
-          mode,
-          language,
-          reportType: payload.report_type,
-          chartType: payload.chart_type,
-          columns,
-          result: final,
-        },
+      await createResult({
+        prompt: trimmed,
+        mode,
+        language,
+        payload: final,
       });
+      navigate("/results");
     } catch (err) {
       if (err?.name === "AbortError") return;
       setRunning(false);
@@ -170,27 +169,27 @@ export default function AnalysisPage() {
   const columnsDir = textDirection(columnsRaw);
 
   return (
-    <div className="flex h-full min-h-0 max-w-6xl flex-col">
+    <div className="flex h-full min-h-0 flex-col gap-2">
+      <PageHeader icon={BarChart3} title="Analysis" />
       <form
         onSubmit={handleRun}
-        className="rounded-2xl border border-line/80 bg-paper/80 p-4 shadow-[0_20px_50px_-30px_rgba(0,0,0,0.45)] backdrop-blur-sm sm:p-5"
+        className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto rounded-2xl border border-line/80 bg-paper/80 p-4 shadow-[0_20px_50px_-30px_rgba(0,0,0,0.45)] backdrop-blur-sm sm:p-5"
       >
         <label htmlFor="prompt" className="block text-sm font-medium text-ink">
           Prompt
         </label>
         <textarea
           id="prompt"
-          rows={4}
           value={prompt}
           dir={promptDir}
           lang={textLang(prompt)}
           onChange={(e) => setPrompt(e.target.value)}
-          className="mt-2 w-full resize-y rounded-xl border border-line bg-paper px-4 py-3 text-[15px] leading-relaxed text-ink outline-none ring-moss/30 transition focus:border-moss focus:ring-2"
+          className="min-h-[8rem] w-full flex-1 resize-y rounded-xl border border-line bg-paper px-4 py-3 text-[15px] leading-relaxed text-ink outline-none ring-moss/30 transition focus:border-moss focus:ring-2"
           placeholder="e.g. Cluster clients by revenue and usage"
         />
 
-        <div className="mt-3 flex flex-wrap items-end gap-3">
-          <div className="min-w-[10rem] flex-1">
+        <div className="flex flex-col gap-3">
+          <div>
             <label htmlFor="mode" className="block text-sm font-medium text-ink">
               Mode
             </label>
@@ -209,7 +208,7 @@ export default function AnalysisPage() {
           </div>
 
           {needsType(mode) ? (
-            <div className="min-w-[8.5rem] flex-1">
+            <div>
               <label
                 htmlFor="report_type"
                 className="block text-sm font-medium text-ink"
@@ -232,7 +231,7 @@ export default function AnalysisPage() {
           ) : null}
 
           {needsChart(mode) ? (
-            <div className="min-w-[9rem] flex-1">
+            <div>
               <label
                 htmlFor="chart_type"
                 className="block text-sm font-medium text-ink"
@@ -254,7 +253,7 @@ export default function AnalysisPage() {
             </div>
           ) : null}
 
-          <div className="min-w-[8.5rem] flex-1">
+          <div>
             <label
               htmlFor="language"
               className="block text-sm font-medium text-ink"
@@ -275,38 +274,39 @@ export default function AnalysisPage() {
             </select>
           </div>
 
-          <button
+          {mode === "grid" ? (
+            <div>
+              <label
+                htmlFor="grid_columns"
+                className="block text-sm font-medium text-ink"
+              >
+                Columns
+              </label>
+              <input
+                id="grid_columns"
+                type="text"
+                value={columnsRaw}
+                dir={columnsDir}
+                lang={textLang(columnsRaw)}
+                onChange={(e) => setColumnsRaw(e.target.value)}
+                placeholder="Category/Product/OrderQty/LineTotal or Category, Product, Qty"
+                className="mt-1.5 w-full rounded-xl border border-line bg-paper px-4 py-2.5 text-[15px] text-ink outline-none ring-moss/30 focus:border-moss focus:ring-2"
+              />
+              <p className="mt-1 text-xs text-muted">
+                Separate columns with / or ,
+              </p>
+            </div>
+          ) : null}
+
+          <IconButton
             type="submit"
+            icon={Play}
             disabled={running}
-            className="shrink-0 rounded-xl bg-moss px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-moss-deep disabled:opacity-60"
+            className="w-full rounded-xl bg-moss px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-moss-deep disabled:opacity-60 sm:w-auto"
           >
             Run
-          </button>
+          </IconButton>
         </div>
-
-        {mode === "grid" ? (
-          <div className="mt-3">
-            <label
-              htmlFor="grid_columns"
-              className="block text-sm font-medium text-ink"
-            >
-              Columns
-            </label>
-            <input
-              id="grid_columns"
-              type="text"
-              value={columnsRaw}
-              dir={columnsDir}
-              lang={textLang(columnsRaw)}
-              onChange={(e) => setColumnsRaw(e.target.value)}
-              placeholder="Category/Product/OrderQty/LineTotal or Category, Product, Qty"
-              className="mt-1.5 w-full rounded-xl border border-line bg-paper px-4 py-2.5 text-[15px] text-ink outline-none ring-moss/30 focus:border-moss focus:ring-2"
-            />
-            <p className="mt-1 text-xs text-muted">
-              Separate columns with / or ,
-            </p>
-          </div>
-        ) : null}
       </form>
 
       {error ? (

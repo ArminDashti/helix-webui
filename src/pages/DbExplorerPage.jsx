@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
+import { ArrowDown, ArrowUp, Database, Play } from "lucide-react";
 import {
   fetchDbExplorerColumns,
   fetchDbExplorerTables,
   runDbExplorerQuery,
 } from "../api/client.js";
+import IconButton from "../components/IconButton.jsx";
+import PageHeader from "../components/PageHeader.jsx";
 
 const LIMITS = [16, 32, 64, 128];
 const WHERE_PLACEHOLDER = "e.g. Status = Active AND Amount > 0";
@@ -100,12 +103,11 @@ export default function DbExplorerPage() {
 
   return (
     <div className="hx-rise flex h-full min-h-0 flex-col gap-3">
-      <header className="shrink-0">
-        <h1 className="font-display text-xl text-ink sm:text-2xl">DB Explorer</h1>
+      <PageHeader icon={Database} title="DB Explorer">
         <p className="text-sm text-muted">
           SELECT top or tail rows with WHERE, ORDER BY, and ASC/DESC sort.
         </p>
-      </header>
+      </PageHeader>
 
       {error ? (
         <p className="shrink-0 rounded-xl border border-warn-border bg-warn-bg px-4 py-2 text-sm text-warn">
@@ -158,9 +160,10 @@ export default function DbExplorerPage() {
             <legend className="font-medium text-ink">Rows</legend>
             <div className="mt-1 flex flex-wrap gap-2">
               {LIMITS.map((n) => (
-                <button
+                <IconButton
                   key={n}
                   type="button"
+                  icon={Database}
                   onClick={() => setLimit(n)}
                   className={[
                     "rounded-lg border px-3 py-1.5 text-xs font-semibold",
@@ -170,7 +173,7 @@ export default function DbExplorerPage() {
                   ].join(" ")}
                 >
                   {n}
-                </button>
+                </IconButton>
               ))}
             </div>
           </fieldset>
@@ -179,9 +182,10 @@ export default function DbExplorerPage() {
             <legend className="font-medium text-ink">Position</legend>
             <div className="mt-1 flex gap-2">
               {["top", "tail"].map((pos) => (
-                <button
+                <IconButton
                   key={pos}
                   type="button"
+                  icon={pos === "top" ? ArrowUp : ArrowDown}
                   onClick={() => setPosition(pos)}
                   className={[
                     "rounded-lg border px-3 py-1.5 text-xs font-semibold capitalize",
@@ -191,7 +195,7 @@ export default function DbExplorerPage() {
                   ].join(" ")}
                 >
                   {pos}
-                </button>
+                </IconButton>
               ))}
             </div>
           </fieldset>
@@ -239,13 +243,14 @@ export default function DbExplorerPage() {
           />
         </label>
 
-        <button
+        <IconButton
           type="submit"
+          icon={Play}
           disabled={!table || running}
           className="rounded-xl bg-moss px-5 py-2.5 text-sm font-semibold text-white hover:bg-moss-deep disabled:opacity-50"
         >
           {running ? "Running…" : "Run SELECT"}
-        </button>
+        </IconButton>
       </form>
 
       {result ? (

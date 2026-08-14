@@ -367,24 +367,36 @@ export async function fetchCursorModels({ force = false } = {}) {
   return requestJson(`/api/admin/cursor/models/${qs}`);
 }
 
+export async function fetchPipelineBundle() {
+  return requestJson("/api/admin/pipeline-graph/");
+}
+
 export async function fetchPipelineGraph() {
-  const data = await requestJson("/api/admin/pipeline-graph/");
+  const data = await fetchPipelineBundle();
   return data.pipeline_graph;
+}
+
+export async function savePipelineBundle(payload) {
+  return requestJson("/api/admin/pipeline-graph/", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function savePipelineGraph(pipeline_graph) {
-  const data = await requestJson("/api/admin/pipeline-graph/", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ pipeline_graph }),
-  });
+  const data = await savePipelineBundle({ pipeline_graph });
   return data.pipeline_graph;
 }
 
-export async function resetPipelineGraph() {
-  const data = await requestJson("/api/admin/pipeline-graph/", {
+export async function resetPipelineBundle() {
+  return requestJson("/api/admin/pipeline-graph/", {
     method: "DELETE",
   });
+}
+
+export async function resetPipelineGraph() {
+  const data = await resetPipelineBundle();
   return data.pipeline_graph;
 }
 

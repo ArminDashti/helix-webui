@@ -8,8 +8,10 @@ import {
   updateSkill,
 } from "../api/client.js";
 import DataGrid from "../components/DataGrid.jsx";
+import FlashMessage from "../components/FlashMessage.jsx";
 import IconButton from "../components/IconButton.jsx";
 import PageHeader from "../components/PageHeader.jsx";
+import useFlash from "../lib/useFlash.js";
 import StackedNames from "../components/StackedNames.jsx";
 
 function agentLabels(skill, agents) {
@@ -21,7 +23,7 @@ export default function SkillsPage() {
   const navigate = useNavigate();
   const [agents, setAgents] = useState([]);
   const [skills, setSkills] = useState([]);
-  const [status, setStatus] = useState(null);
+  const [status, setStatus] = useFlash();
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -175,11 +177,7 @@ export default function SkillsPage() {
           {error}
         </p>
       ) : null}
-      {status ? (
-        <p className="shrink-0 rounded-xl border border-line bg-paper/80 px-4 py-2 text-sm text-moss">
-          {status}
-        </p>
-      ) : null}
+      <FlashMessage message={status} />
       <DataGrid columns={columns} rows={rows} emptyLabel="No skills" />
     </div>
   );

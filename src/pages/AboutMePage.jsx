@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { User } from "lucide-react";
+import PageHeader from "../components/PageHeader.jsx";
 
 function ContactEmail() {
   const parts = useMemo(
@@ -31,10 +33,9 @@ function ContactEmail() {
 export default function AboutMePage() {
   return (
     <div className="hx-rise mx-auto flex h-full min-h-0 max-w-3xl flex-col gap-5 overflow-y-auto pb-8">
-      <header className="space-y-2">
-        <h1 className="font-display text-3xl text-ink sm:text-4xl">About Me</h1>
+      <PageHeader icon={User} title="About Me">
         <p className="text-sm text-muted">Armin Dashti — vibe coder, conductor of craft.</p>
-      </header>
+      </PageHeader>
 
       <div className="grid gap-4 sm:grid-cols-[160px_1fr] sm:items-start">
         <div className="overflow-hidden rounded-2xl border border-line/80 bg-fog/40">
