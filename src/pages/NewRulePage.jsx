@@ -1,8 +1,7 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, Scale } from "lucide-react";
-import { createRule, fetchAgents } from "../api/client.js";
-import AgentPicker from "../components/AgentPicker.jsx";
+import { createRule } from "../api/client.js";
 import IconButton from "../components/IconButton.jsx";
 import PageHeader from "../components/PageHeader.jsx";
 
@@ -11,35 +10,11 @@ const inputClass =
 
 export default function NewRulePage() {
   const navigate = useNavigate();
-  const [agents, setAgents] = useState([]);
-  const [agentIds, setAgentIds] = useState([]);
   const [newId, setNewId] = useState("");
   const [name, setName] = useState("");
   const [content, setContent] = useState("# New rule\n\n");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const list = (await fetchAgents()) || [];
-        if (cancelled) return;
-        setAgents(list);
-        setAgentIds(list[0]?.id ? [list[0].id] : []);
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load agents");
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   async function handleCreate(event) {
     event.preventDefault();
@@ -52,16 +27,12 @@ export default function NewRulePage() {
       setError("Enter a rule name.");
       return;
     }
-    if (!agentIds.length) {
-      setError("Select at least one agent.");
-      return;
-    }
     setSaving(true);
     setError(null);
     try {
       await createRule(id, {
         content: content || "# New rule\n\n",
-        agents: agentIds,
+        agents: [],
         name: name.trim(),
       });
       navigate("/rules");
@@ -70,10 +41,6 @@ export default function NewRulePage() {
     } finally {
       setSaving(false);
     }
-  }
-
-  if (loading) {
-    return <p className="text-sm text-muted">Loading…</p>;
   }
 
   return (
@@ -110,11 +77,6 @@ export default function NewRulePage() {
             />
           </label>
         </div>
-        <AgentPicker
-          agents={agents}
-          selectedIds={agentIds}
-          onChange={setAgentIds}
-        />
         <label className="flex min-h-0 flex-1 flex-col text-sm">
           <span className="font-medium text-ink">Content</span>
           <textarea

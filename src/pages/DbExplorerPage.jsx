@@ -265,7 +265,7 @@ export default function DbExplorerPage() {
             </code>
           </div>
           <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-line">
-            <table className="min-w-full text-left text-sm">
+            <table className="min-w-full text-left font-sans text-sm">
               <thead className="sticky top-0 bg-fog/80 text-xs uppercase tracking-wide text-muted backdrop-blur">
                 <tr>
                   {(result.columns || []).map((c) => (
@@ -279,7 +279,7 @@ export default function DbExplorerPage() {
                 {(result.rows || []).map((row, idx) => (
                   <tr key={idx} className="border-t border-line/70">
                     {(result.columns || []).map((c) => (
-                      <td key={c} className="whitespace-nowrap px-3 py-1.5 font-mono text-[12px]">
+                      <td key={c} className="whitespace-nowrap px-3 py-1.5 font-sans text-[12px]">
                         {row[c] === null || row[c] === undefined ? (
                           <span className="text-muted">NULL</span>
                         ) : (

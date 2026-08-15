@@ -1,35 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Ban, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
-import {
-  deleteSkill,
-  fetchAgents,
-  fetchSkills,
-  updateSkill,
-} from "../api/client.js";
+import { deleteSkill, fetchSkills, updateSkill } from "../api/client.js";
 import DataGrid from "../components/DataGrid.jsx";
 import FlashMessage from "../components/FlashMessage.jsx";
 import IconButton from "../components/IconButton.jsx";
 import PageHeader from "../components/PageHeader.jsx";
 import useFlash from "../lib/useFlash.js";
-import StackedNames from "../components/StackedNames.jsx";
-
-function agentLabels(skill, agents) {
-  const ids = skill.agents || [];
-  return ids.map((id) => agents.find((a) => a.id === id)?.name || id);
-}
 
 export default function SkillsPage() {
   const navigate = useNavigate();
-  const [agents, setAgents] = useState([]);
   const [skills, setSkills] = useState([]);
   const [status, setStatus] = useFlash();
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
 
   async function reload() {
-    const [a, s] = await Promise.all([fetchAgents(), fetchSkills()]);
-    setAgents(a || []);
+    const s = await fetchSkills();
     setSkills(s || []);
   }
 
@@ -94,18 +81,13 @@ export default function SkillsPage() {
       key: "id",
       label: "ID",
       render: (skill) => (
-        <span className="font-mono text-[13px]">{skill.id}</span>
+        <span className="font-sans text-[13px]">{skill.id}</span>
       ),
     },
     {
       key: "name",
       label: "Name",
       render: (skill) => skill.name || skill.id,
-    },
-    {
-      key: "agents",
-      label: "Agents",
-      render: (skill) => <StackedNames items={agentLabels(skill, agents)} />,
     },
     {
       key: "edit",

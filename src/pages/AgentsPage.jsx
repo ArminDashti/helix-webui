@@ -92,7 +92,7 @@ export default function AgentsPage() {
       key: "id",
       label: "ID",
       render: (agent) => (
-        <span className="font-mono text-[13px]">{agent.id}</span>
+        <span className="font-sans text-[13px]">{agent.id}</span>
       ),
     },
     {

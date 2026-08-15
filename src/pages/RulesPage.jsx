@@ -1,35 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Ban, Pencil, Plus, Scale, Trash2 } from "lucide-react";
-import {
-  deleteRule,
-  fetchAgents,
-  fetchRules,
-  updateRule,
-} from "../api/client.js";
+import { deleteRule, fetchRules, updateRule } from "../api/client.js";
 import DataGrid from "../components/DataGrid.jsx";
 import FlashMessage from "../components/FlashMessage.jsx";
 import IconButton from "../components/IconButton.jsx";
 import PageHeader from "../components/PageHeader.jsx";
 import useFlash from "../lib/useFlash.js";
-import StackedNames from "../components/StackedNames.jsx";
-
-function agentLabels(rule, agents) {
-  const ids = rule.agents || [];
-  return ids.map((id) => agents.find((a) => a.id === id)?.name || id);
-}
 
 export default function RulesPage() {
   const navigate = useNavigate();
-  const [agents, setAgents] = useState([]);
   const [rules, setRules] = useState([]);
   const [status, setStatus] = useFlash();
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
 
   async function reload() {
-    const [a, r] = await Promise.all([fetchAgents(), fetchRules()]);
-    setAgents(a || []);
+    const r = await fetchRules();
     setRules(r || []);
   }
 
@@ -80,18 +67,13 @@ export default function RulesPage() {
       key: "id",
       label: "ID",
       render: (rule) => (
-        <span className="font-mono text-[13px]">{rule.id}</span>
+        <span className="font-sans text-[13px]">{rule.id}</span>
       ),
     },
     {
       key: "name",
       label: "Name",
       render: (rule) => rule.name || rule.id,
-    },
-    {
-      key: "agents",
-      label: "Agents",
-      render: (rule) => <StackedNames items={agentLabels(rule, agents)} />,
     },
     {
       key: "edit",

@@ -1,13 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Save, Sparkles } from "lucide-react";
-import {
-  fetchAgents,
-  fetchSkills,
-  renameSkill,
-  updateSkill,
-} from "../api/client.js";
-import AgentPicker from "../components/AgentPicker.jsx";
+import { fetchSkills, renameSkill, updateSkill } from "../api/client.js";
 import IconButton from "../components/IconButton.jsx";
 import PageHeader from "../components/PageHeader.jsx";
 
@@ -17,11 +11,9 @@ const inputClass =
 export default function EditSkillPage() {
   const { scope, skillId } = useParams();
   const navigate = useNavigate();
-  const [agents, setAgents] = useState([]);
   const [skill, setSkill] = useState(null);
   const [name, setName] = useState("");
   const [idDraft, setIdDraft] = useState("");
-  const [agentIds, setAgentIds] = useState([]);
   const [content, setContent] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -31,9 +23,8 @@ export default function EditSkillPage() {
     let cancelled = false;
     (async () => {
       try {
-        const [list, skills] = await Promise.all([fetchAgents(), fetchSkills()]);
+        const skills = await fetchSkills();
         if (cancelled) return;
-        setAgents(list || []);
         const found = (skills || []).find(
           (s) => s.scope === scope && s.id === skillId,
         );
@@ -44,7 +35,6 @@ export default function EditSkillPage() {
         setSkill(found);
         setName(found.name || found.id);
         setIdDraft(found.id);
-        setAgentIds(found.agents || []);
         setContent(found.content || "");
       } catch (err) {
         if (!cancelled) {
@@ -62,10 +52,6 @@ export default function EditSkillPage() {
   async function handleSave(event) {
     event.preventDefault();
     if (!skill) return;
-    if (!agentIds.length) {
-      setError("Select at least one agent.");
-      return;
-    }
     setSaving(true);
     setError(null);
     try {
@@ -76,7 +62,7 @@ export default function EditSkillPage() {
       }
       await updateSkill(skill.scope, currentId, {
         content,
-        agents: agentIds,
+        agents: [],
         name,
       });
       navigate("/skills");
@@ -123,11 +109,6 @@ export default function EditSkillPage() {
             />
           </label>
         </div>
-        <AgentPicker
-          agents={agents}
-          selectedIds={agentIds}
-          onChange={setAgentIds}
-        />
         <label className="flex min-h-0 flex-1 flex-col text-sm">
           <span className="font-medium text-ink">Content</span>
           <textarea

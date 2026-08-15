@@ -1,21 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import ReactECharts from "echarts-for-react";
 import {
-  Archive,
-  ArchiveRestore,
   ArrowLeft,
+  Eye,
   FileDown,
   History,
   Pencil,
   Play,
   Plus,
+  Trash2,
 } from "lucide-react";
 import {
+  deleteResult,
   fetchResult,
   fetchResults,
-  setResultArchived,
 } from "../api/client.js";
+import DataGrid from "../components/DataGrid.jsx";
 import IconButton from "../components/IconButton.jsx";
 import PageHeader from "../components/PageHeader.jsx";
 import { hasPersianScript } from "../utils/textDirection.js";
@@ -128,8 +129,8 @@ function exportResultPdf({
   img { max-width: 100%; height: auto; border: 1px solid #ccc; border-radius: 12px; }
   article { margin-top: 20px; padding: 16px; border: 1px solid #ccc; border-radius: 12px;
     background: #f7f7f7; white-space: pre-wrap; line-height: 1.5; font-size: 14px; }
-  table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 13px; }
-  th, td { border: 1px solid #ccc; padding: 8px 10px; text-align: start; }
+  table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 13px; font-family: Vazirmatn, system-ui, sans-serif; }
+  th, td { border: 1px solid #ccc; padding: 8px 10px; text-align: start; font-family: Vazirmatn, system-ui, sans-serif; }
   th { background: #f0f0f0; }
   @media print { body { margin: 12px; } }
 </style></head><body>
@@ -166,39 +167,12 @@ function formatWhen(iso) {
   if (!iso) return "";
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
-  return date.toLocaleString();
-}
-
-function ResultRow({ item, onArchive, archiveLabel }) {
-  return (
-    <li>
-      <div className="flex items-stretch gap-2">
-        <Link
-          to={`/results/${item.id}`}
-          className="min-w-0 flex-1 rounded-xl border border-line bg-fog/40 px-3 py-2 text-left hover:bg-fog"
-        >
-          <span className="block truncate text-sm font-medium text-ink">
-            {item.prompt || "(no prompt)"}
-          </span>
-          <span className="mt-0.5 block text-[11px] text-muted">
-            {formatWhen(item.created_at)}
-            {item.mode ? ` · ${item.mode}` : ""}
-          </span>
-        </Link>
-        <IconButton
-          type="button"
-          icon={archiveLabel === "Restore" ? ArchiveRestore : Archive}
-          onClick={() => onArchive(item)}
-          className="shrink-0 rounded-xl border border-line bg-paper px-3 py-2 text-xs font-medium text-ink hover:bg-fog"
-        >
-          {archiveLabel}
-        </IconButton>
-      </div>
-    </li>
-  );
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}:${pad(date.getMonth() + 1)}:${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
 function ResultsList() {
+  const navigate = useNavigate();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -220,28 +194,122 @@ function ResultsList() {
     })();
   }, []);
 
-  async function toggleArchive(item, archived) {
+  async function handleExport(item) {
     setError(null);
     try {
-      await setResultArchived(item.id, archived);
-      await load();
+      const record = await fetchResult(item.id);
+      const result = record?.payload;
+      if (!result) {
+        setError("Result has no payload to export.");
+        return;
+      }
+      const showChart = Boolean(result.echarts_option);
+      const showText = Boolean(result.text_report);
+      const showGrid = Boolean(result.grid?.columns?.length);
+      exportResultPdf({
+        prompt: record.prompt || "",
+        chartInstance: null,
+        textReport: result.text_report || "",
+        grid: result.grid,
+        showChart,
+        showText,
+        showGrid,
+        language: result.language || record.language || "en",
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update result");
+      setError(err instanceof Error ? err.message : "Failed to export result");
     }
   }
 
-  const history = items.filter((item) => !item.archived);
-  const archive = items.filter((item) => item.archived);
+  async function handleDelete(item) {
+    if (!window.confirm("Delete this result?")) return;
+    setError(null);
+    try {
+      await deleteResult(item.id);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete result");
+    }
+  }
+
+  const rows = useMemo(
+    () => items.map((item) => ({ key: item.id, item })),
+    [items],
+  );
+
+  const columns = [
+    {
+      key: "title",
+      label: "Title",
+      render: (item) => item.prompt || "(no prompt)",
+    },
+    {
+      key: "mode",
+      label: "Mode",
+      render: (item) => item.mode || "—",
+    },
+    {
+      key: "datetime",
+      label: "DateTime",
+      render: (item) => (
+        <span className="whitespace-nowrap font-sans text-[13px]">
+          {formatWhen(item.created_at)}
+        </span>
+      ),
+    },
+    {
+      key: "show",
+      label: "Show",
+      render: (item) => (
+        <IconButton
+          type="button"
+          icon={Eye}
+          onClick={() => navigate(`/results/${item.id}`)}
+          className="rounded-lg border border-line bg-fog px-2 py-1.5 text-xs font-medium hover:bg-fog/80"
+        >
+          Show
+        </IconButton>
+      ),
+    },
+    {
+      key: "export",
+      label: "Export",
+      render: (item) => (
+        <IconButton
+          type="button"
+          icon={FileDown}
+          onClick={() => handleExport(item)}
+          className="rounded-lg border border-line bg-fog px-2 py-1.5 text-xs font-medium hover:bg-fog/80"
+        >
+          Export
+        </IconButton>
+      ),
+    },
+    {
+      key: "delete",
+      label: "Delete",
+      render: (item) => (
+        <IconButton
+          type="button"
+          icon={Trash2}
+          onClick={() => handleDelete(item)}
+          className="rounded-lg border border-warn-border bg-warn-bg px-2 py-1.5 text-xs font-medium text-warn hover:opacity-90"
+        >
+          Delete
+        </IconButton>
+      ),
+    },
+  ];
 
   if (loading) {
     return <p className="text-sm text-muted">Loading results…</p>;
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto">
+    <div className="flex h-full min-h-0 flex-col gap-3">
       <PageHeader icon={Play} title="Results">
         <p className="mt-0.5 text-sm text-muted">
-          History of analysis runs and archived reports.
+          History of analysis runs.
         </p>
       </PageHeader>
       {error ? (
@@ -249,44 +317,7 @@ function ResultsList() {
           {error}
         </p>
       ) : null}
-      <section className="space-y-2 rounded-2xl border border-line/80 bg-paper/80 p-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
-          History
-        </h2>
-        {history.length === 0 ? (
-          <p className="text-sm text-muted">No results yet. Run an analysis to add one.</p>
-        ) : (
-          <ul className="space-y-2">
-            {history.map((item) => (
-              <ResultRow
-                key={item.id}
-                item={item}
-                archiveLabel="Archive"
-                onArchive={(row) => toggleArchive(row, true)}
-              />
-            ))}
-          </ul>
-        )}
-      </section>
-      <section className="space-y-2 rounded-2xl border border-line/80 bg-paper/80 p-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
-          Archive
-        </h2>
-        {archive.length === 0 ? (
-          <p className="text-sm text-muted">No archived results.</p>
-        ) : (
-          <ul className="space-y-2">
-            {archive.map((item) => (
-              <ResultRow
-                key={item.id}
-                item={item}
-                archiveLabel="Restore"
-                onArchive={(row) => toggleArchive(row, false)}
-              />
-            ))}
-          </ul>
-        )}
-      </section>
+      <DataGrid columns={columns} rows={rows} emptyLabel="No results yet. Run an analysis to add one." />
     </div>
   );
 }
@@ -497,7 +528,7 @@ function ResultDetail({ resultId }) {
             <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted">
               Grid
             </h2>
-            <table className="w-full min-w-[20rem] border-collapse text-sm">
+            <table className="w-full min-w-[20rem] border-collapse font-sans text-sm">
               <thead>
                 <tr>
                   {result.grid.columns.map((col) => (

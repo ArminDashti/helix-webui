@@ -416,6 +416,17 @@ export async function saveDocsTableOverview(table, overview) {
   });
 }
 
+export async function saveDocsColumn(
+  table,
+  { column, description = "", sql_description = "" },
+) {
+  return requestJson(`/api/docs/tables/${encodeURIComponent(table)}/`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ column, description, sql_description }),
+  });
+}
+
 export async function fetchResults() {
   const data = await requestJson("/api/results/");
   return data.results || [];
@@ -439,6 +450,14 @@ export async function setResultArchived(resultId, archived) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ archived }),
   });
+}
+
+export async function deleteResult(resultId) {
+  const path = `/api/results/${encodeURIComponent(resultId)}/`;
+  const res = await apiFetch(path, { method: "DELETE" });
+  if (!res.ok && res.status !== 204) {
+    await parseJson(res, path);
+  }
 }
 
 export async function fetchDbExplorerTables() {

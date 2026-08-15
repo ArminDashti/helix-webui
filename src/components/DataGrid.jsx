@@ -1,11 +1,16 @@
-export default function DataGrid({ columns, rows, emptyLabel = "None" }) {
+export default function DataGrid({
+  columns,
+  rows,
+  emptyLabel = "None",
+  onRowClick,
+}) {
   return (
     <div className="min-h-0 flex-1 overflow-auto rounded-2xl border border-line/80 bg-paper/80">
-      <table className="min-w-full text-left text-sm">
+      <table className="min-w-full text-left font-sans text-sm">
         <thead className="sticky top-0 bg-fog/80 text-xs uppercase tracking-wide text-muted backdrop-blur">
           <tr>
             {columns.map((col) => (
-              <th key={col.key} className="whitespace-nowrap px-3 py-2 font-semibold">
+              <th key={col.key} className="whitespace-nowrap px-3 py-2 font-sans font-semibold">
                 {col.label}
               </th>
             ))}
@@ -15,7 +20,7 @@ export default function DataGrid({ columns, rows, emptyLabel = "None" }) {
           {rows.length === 0 ? (
             <tr>
               <td
-                className="px-3 py-4 text-sm text-muted"
+                className="px-3 py-4 font-sans text-sm text-muted"
                 colSpan={columns.length}
               >
                 {emptyLabel}
@@ -23,9 +28,16 @@ export default function DataGrid({ columns, rows, emptyLabel = "None" }) {
             </tr>
           ) : (
             rows.map((row) => (
-              <tr key={row.key} className="border-t border-line/70">
+              <tr
+                key={row.key}
+                className={[
+                  "border-t border-line/70",
+                  onRowClick ? "cursor-pointer hover:bg-fog/50" : "",
+                ].join(" ")}
+                onClick={onRowClick ? () => onRowClick(row.item) : undefined}
+              >
                 {columns.map((col) => (
-                  <td key={col.key} className="px-3 py-2 align-top">
+                  <td key={col.key} className="px-3 py-2 align-top font-sans">
                     {col.render(row.item)}
                   </td>
                 ))}

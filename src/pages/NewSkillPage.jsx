@@ -1,8 +1,7 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, Sparkles } from "lucide-react";
-import { createSkill, fetchAgents } from "../api/client.js";
-import AgentPicker from "../components/AgentPicker.jsx";
+import { createSkill } from "../api/client.js";
 import IconButton from "../components/IconButton.jsx";
 import PageHeader from "../components/PageHeader.jsx";
 
@@ -11,35 +10,11 @@ const inputClass =
 
 export default function NewSkillPage() {
   const navigate = useNavigate();
-  const [agents, setAgents] = useState([]);
-  const [agentIds, setAgentIds] = useState([]);
   const [newId, setNewId] = useState("");
   const [name, setName] = useState("");
   const [content, setContent] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const list = (await fetchAgents()) || [];
-        if (cancelled) return;
-        setAgents(list);
-        setAgentIds(list[0]?.id ? [list[0].id] : []);
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load agents");
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   async function handleCreate(event) {
     event.preventDefault();
@@ -52,10 +27,6 @@ export default function NewSkillPage() {
       setError("Enter a skill name.");
       return;
     }
-    if (!agentIds.length) {
-      setError("Select at least one agent.");
-      return;
-    }
     setSaving(true);
     setError(null);
     try {
@@ -64,7 +35,7 @@ export default function NewSkillPage() {
         `---\nname: ${name.trim()}\ndescription: \n---\n\n# ${name.trim()}\n\n`;
       await createSkill({
         id,
-        agents: agentIds,
+        agents: [],
         name: name.trim(),
         content: starter,
       });
@@ -74,10 +45,6 @@ export default function NewSkillPage() {
     } finally {
       setSaving(false);
     }
-  }
-
-  if (loading) {
-    return <p className="text-sm text-muted">Loading…</p>;
   }
 
   return (
@@ -114,11 +81,6 @@ export default function NewSkillPage() {
             />
           </label>
         </div>
-        <AgentPicker
-          agents={agents}
-          selectedIds={agentIds}
-          onChange={setAgentIds}
-        />
         <label className="flex min-h-0 flex-1 flex-col text-sm">
           <span className="font-medium text-ink">Content</span>
           <textarea

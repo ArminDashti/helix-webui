@@ -1,13 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Save, Scale } from "lucide-react";
-import {
-  fetchAgents,
-  fetchRules,
-  renameRule,
-  updateRule,
-} from "../api/client.js";
-import AgentPicker from "../components/AgentPicker.jsx";
+import { fetchRules, renameRule, updateRule } from "../api/client.js";
 import IconButton from "../components/IconButton.jsx";
 import PageHeader from "../components/PageHeader.jsx";
 
@@ -17,11 +11,9 @@ const inputClass =
 export default function EditRulePage() {
   const { ruleId } = useParams();
   const navigate = useNavigate();
-  const [agents, setAgents] = useState([]);
   const [rule, setRule] = useState(null);
   const [name, setName] = useState("");
   const [idDraft, setIdDraft] = useState("");
-  const [agentIds, setAgentIds] = useState([]);
   const [content, setContent] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -31,9 +23,8 @@ export default function EditRulePage() {
     let cancelled = false;
     (async () => {
       try {
-        const [list, rules] = await Promise.all([fetchAgents(), fetchRules()]);
+        const rules = await fetchRules();
         if (cancelled) return;
-        setAgents(list || []);
         const found = (rules || []).find((r) => r.id === ruleId);
         if (!found) {
           setError("Rule not found");
@@ -42,7 +33,6 @@ export default function EditRulePage() {
         setRule(found);
         setName(found.name || found.id);
         setIdDraft(found.id);
-        setAgentIds(found.agents || []);
         setContent(found.content || "");
       } catch (err) {
         if (!cancelled) {
@@ -60,10 +50,6 @@ export default function EditRulePage() {
   async function handleSave(event) {
     event.preventDefault();
     if (!rule) return;
-    if (!agentIds.length) {
-      setError("Select at least one agent.");
-      return;
-    }
     setSaving(true);
     setError(null);
     try {
@@ -74,7 +60,7 @@ export default function EditRulePage() {
       }
       await updateRule(currentId, {
         content,
-        agents: agentIds,
+        agents: [],
         name,
       });
       navigate("/rules");
@@ -121,11 +107,6 @@ export default function EditRulePage() {
             />
           </label>
         </div>
-        <AgentPicker
-          agents={agents}
-          selectedIds={agentIds}
-          onChange={setAgentIds}
-        />
         <label className="flex min-h-0 flex-1 flex-col text-sm">
           <span className="font-medium text-ink">Content</span>
           <textarea

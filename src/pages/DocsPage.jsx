@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Save, Table2 } from "lucide-react";
-import { fetchDocsTable, fetchDocsTables, saveDocsTableOverview } from "../api/client.js";
+import { fetchDocsTable, fetchDocsTables, saveDocsColumn, saveDocsTableOverview } from "../api/client.js";
+import ColumnDocsModal from "../components/ColumnDocsModal.jsx";
+import DataGrid from "../components/DataGrid.jsx";
 import IconButton from "../components/IconButton.jsx";
 import PageHeader from "../components/PageHeader.jsx";
 
@@ -16,6 +18,9 @@ export default function DocsPage() {
   const [overviewDraft, setOverviewDraft] = useState("");
   const [overviewDirty, setOverviewDirty] = useState(false);
   const [savingOverview, setSavingOverview] = useState(false);
+  const [editingColumn, setEditingColumn] = useState(null);
+  const [savingColumn, setSavingColumn] = useState(false);
+  const [columnError, setColumnError] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -72,6 +77,53 @@ export default function DocsPage() {
         .includes(q),
     );
   }, [tables, tableFilter]);
+
+  const columnRows = useMemo(
+    () =>
+      (detail?.columns || []).map((col) => ({
+        key: col.name,
+        item: col,
+      })),
+    [detail],
+  );
+
+  const columnGrid = [
+    {
+      key: "name",
+      label: "Column",
+      render: (col) => (
+        <span className="font-sans text-[13px]">{col.name}</span>
+      ),
+    },
+    {
+      key: "data_type",
+      label: "Type",
+      render: (col) => (
+        <span className="text-muted">{col.data_type || "—"}</span>
+      ),
+    },
+    {
+      key: "nullable",
+      label: "Null",
+      render: (col) => (
+        <span className="text-muted">{col.nullable ? "YES" : "NO"}</span>
+      ),
+    },
+    {
+      key: "sql_description",
+      label: "sql-description",
+      render: (col) =>
+        col.sql_description || (
+          <span className="text-muted">No sql-description</span>
+        ),
+    },
+    {
+      key: "description",
+      label: "description",
+      render: (col) =>
+        col.description || <span className="text-muted">No description</span>,
+    },
+  ];
 
   if (loading) {
     return <p className="text-sm text-muted">Loading database docs…</p>;
@@ -197,39 +249,50 @@ export default function DocsPage() {
               </div>
               <div>
                 <h3 className="mb-2 text-sm font-semibold text-ink">Columns</h3>
-                <div className="overflow-x-auto rounded-xl border border-line">
-                  <table className="min-w-full text-left text-sm">
-                    <thead className="bg-fog/50 text-xs uppercase tracking-wide text-muted">
-                      <tr>
-                        <th className="px-3 py-2 font-semibold">Column</th>
-                        <th className="px-3 py-2 font-semibold">Type</th>
-                        <th className="px-3 py-2 font-semibold">Null</th>
-                        <th className="px-3 py-2 font-semibold">Description</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(detail.columns || []).map((col) => (
-                        <tr key={col.name} className="border-t border-line/70">
-                          <td className="px-3 py-2 font-mono text-[13px]">{col.name}</td>
-                          <td className="px-3 py-2 text-muted">{col.data_type || "—"}</td>
-                          <td className="px-3 py-2 text-muted">
-                            {col.nullable ? "YES" : "NO"}
-                          </td>
-                          <td className="px-3 py-2">
-                            {col.description || (
-                              <span className="text-muted">No description</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <DataGrid
+                  columns={columnGrid}
+                  rows={columnRows}
+                  emptyLabel="No columns"
+                  onRowClick={(col) => {
+                    setColumnError(null);
+                    setEditingColumn(col);
+                  }}
+                />
               </div>
             </div>
           )}
         </section>
       </div>
+      <ColumnDocsModal
+        column={editingColumn}
+        saving={savingColumn}
+        error={columnError}
+        onClose={() => {
+          if (savingColumn) return;
+          setEditingColumn(null);
+          setColumnError(null);
+        }}
+        onSave={async ({ sql_description, description }) => {
+          if (!selected || !editingColumn) return;
+          setSavingColumn(true);
+          setColumnError(null);
+          try {
+            const data = await saveDocsColumn(selected, {
+              column: editingColumn.name,
+              description,
+              sql_description,
+            });
+            setDetail(data);
+            setEditingColumn(null);
+          } catch (err) {
+            setColumnError(
+              err instanceof Error ? err.message : "Failed to save column",
+            );
+          } finally {
+            setSavingColumn(false);
+          }
+        }}
+      />
     </div>
   );
 }
