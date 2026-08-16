@@ -15,11 +15,13 @@ import IconButton from "../components/IconButton.jsx";
 import PageHeader from "../components/PageHeader.jsx";
 import useFlash from "../lib/useFlash.js";
 import StackedNames from "../components/StackedNames.jsx";
+import { agentCompanyLabel } from "../utils/agentLabel.js";
 
 function namesForAgent(agentId, items) {
   return items
     .filter((item) => (item.agents || []).includes(agentId))
-    .map((item) => item.name || item.id);
+    .map((item) => item.name || item.id)
+    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
 }
 
 export default function AgentsPage() {
@@ -68,7 +70,9 @@ export default function AgentsPage() {
         prev.map((a) => (a.id === agent.id ? { ...a, ...updated } : a)),
       );
       setStatus(
-        updated.disabled ? `Disabled ${updated.name}` : `Enabled ${updated.name}`,
+        updated.disabled
+          ? `Disabled ${agentCompanyLabel(updated)}`
+          : `Enabled ${agentCompanyLabel(updated)}`,
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Update failed");
@@ -76,7 +80,7 @@ export default function AgentsPage() {
   }
 
   async function handleDelete(agent) {
-    if (!window.confirm(`Delete agent “${agent.name || agent.id}”?`)) return;
+    if (!window.confirm(`Delete agent “${agentCompanyLabel(agent)}”?`)) return;
     setError(null);
     try {
       await deleteAgent(agent.id);
@@ -92,12 +96,19 @@ export default function AgentsPage() {
       key: "id",
       label: "ID",
       render: (agent) => (
-        <span className="font-sans text-[13px]">{agent.id}</span>
+        <span className="font-sans text-[13px]" title={agent.id}>
+          {agent.id}
+        </span>
       ),
     },
     {
+      key: "human_name",
+      label: "Human name",
+      render: (agent) => agent.human_name || "—",
+    },
+    {
       key: "name",
-      label: "Name",
+      label: "Role",
       render: (agent) => agent.name || agent.id,
     },
     {

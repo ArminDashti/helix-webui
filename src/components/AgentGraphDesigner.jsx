@@ -12,7 +12,7 @@ import {
   useNodesState,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { GitBranch, Plus, Repeat } from "lucide-react";
+import { Plus } from "lucide-react";
 import IconButton from "./IconButton.jsx";
 import EdgeKindFields from "./EdgeKindFields.jsx";
 import {
@@ -23,17 +23,19 @@ import {
   inferEdgeKind,
   insertAfterAgent,
   insertBlock,
-  newAgent,
-  newIf,
+  newStage,
   nextId,
-  wrapAgentInLoop,
 } from "../pipeline/pipelineFlow.js";
+import { sortByLabel } from "../utils/sortOptions.js";
+import { agentCompanyLabel } from "../utils/agentLabel.js";
 
 function AgentNode({ data }) {
   return (
     <div className="min-w-[9rem] rounded-xl border border-line bg-paper px-3 py-2 shadow-sm">
       <Handle type="target" position={Position.Top} className="!bg-moss" />
-      <p className="truncate text-sm font-semibold text-ink">{data.label}</p>
+      <p className="truncate text-sm font-semibold text-ink" title={data.agentId}>
+        {data.label}
+      </p>
       <Handle type="source" position={Position.Bottom} className="!bg-moss" />
     </div>
   );
@@ -88,7 +90,7 @@ function graphToFlowNodes(graph, agentsById) {
     position: n.position || { x: 0, y: 0 },
     data: {
       agentId: n.id,
-      label: agentsById[n.id]?.name || n.id,
+      label: agentCompanyLabel(agentsById[n.id]) || n.id,
     },
   }));
   const edges = (graph?.edges || []).map((e) => ({
@@ -122,6 +124,11 @@ function AgentGraphDesignerInner({
     for (const a of agents) map[a.id] = a;
     return map;
   }, [agents]);
+
+  const agentsAz = useMemo(
+    () => sortByLabel(agents, (a) => agentCompanyLabel(a)),
+    [agents],
+  );
 
   const positions = useMemo(() => {
     const map = {};
@@ -232,9 +239,9 @@ function AgentGraphDesignerInner({
     if (!paletteId || usedIds.has(paletteId)) return;
     if (!unstructured && flow) {
       if (selectedNodeId && agentsById[selectedNodeId]) {
-        onFlowChange(insertAfterAgent(flow, selectedNodeId, newAgent(paletteId)));
+        onFlowChange(insertAfterAgent(flow, selectedNodeId, newStage(paletteId)));
       } else {
-        onFlowChange(insertBlock(flow, [], (flow.children || []).length, newAgent(paletteId)));
+        onFlowChange(insertBlock(flow, [], (flow.children || []).length, newStage(paletteId)));
       }
       return;
     }
@@ -249,23 +256,6 @@ function AgentGraphDesignerInner({
         },
       ],
     }));
-  }
-
-  function addIf() {
-    if (unstructured || !flow) return;
-    const after = selectedNodeId && agentsById[selectedNodeId] ? selectedNodeId : null;
-    if (after) onFlowChange(insertAfterAgent(flow, after, newIf()));
-    else onFlowChange(insertBlock(flow, [], (flow.children || []).length, newIf()));
-  }
-
-  function addLoop() {
-    if (unstructured || !flow) return;
-    if (selectedNodeId && agentsById[selectedNodeId]) {
-      onFlowChange(wrapAgentInLoop(flow, selectedNodeId));
-      return;
-    }
-    const first = collectAgentIds(flow, [])[0];
-    if (first) onFlowChange(wrapAgentInLoop(flow, first));
   }
 
   function updateSelectedEdge(partial) {
@@ -318,9 +308,9 @@ function AgentGraphDesignerInner({
               onChange={(e) => setPaletteId(e.target.value)}
               className="mt-1 block min-w-[12rem] rounded-xl border border-line bg-fog/40 px-3 py-2 text-sm outline-none focus:border-moss"
             >
-              {agents.map((a) => (
-                <option key={a.id} value={a.id} disabled={usedIds.has(a.id)}>
-                  {a.name}
+              {agentsAz.map((a) => (
+                <option key={a.id} value={a.id} disabled={usedIds.has(a.id)} title={a.id}>
+                  {agentCompanyLabel(a)}
                   {usedIds.has(a.id) ? " (on flow)" : ""}
                 </option>
               ))}
@@ -335,26 +325,6 @@ function AgentGraphDesignerInner({
           >
             Add to canvas
           </IconButton>
-          {!unstructured ? (
-            <>
-              <IconButton
-                type="button"
-                icon={GitBranch}
-                onClick={addIf}
-                className="rounded-xl border border-line bg-fog px-4 py-2 text-sm font-medium hover:bg-fog/80"
-              >
-                Add If
-              </IconButton>
-              <IconButton
-                type="button"
-                icon={Repeat}
-                onClick={addLoop}
-                className="rounded-xl border border-line bg-fog px-4 py-2 text-sm font-medium hover:bg-fog/80"
-              >
-                Add Back
-              </IconButton>
-            </>
-          ) : null}
         </div>
         <div className="min-h-[22rem] flex-1 overflow-hidden rounded-2xl border border-line/80 bg-fog/20">
           <ReactFlow
@@ -392,14 +362,13 @@ function AgentGraphDesignerInner({
         </h3>
         {!unstructured ? (
           <p className="text-sm text-muted">
-            Graph shows the same flow as Arrange. Add If / Loop here, or edit
-            Then / Else stacks in Arrange. Then is the left handle; Else is the
-            right handle.
+            Graph shows the same flow as Arrange. Edit IF / IF NOT / Go to in
+            Arrange (one IF per stage).
           </p>
         ) : !selectedEdge ? (
           <p className="text-sm text-muted">
             Select an edge to set when it is used. This graph cannot be shown as
-            Arrange until each If has a single Then and Else.
+            Arrange until each stage has a single IF, IF NOT, or Go to.
           </p>
         ) : (
           <div className="space-y-3 text-sm">

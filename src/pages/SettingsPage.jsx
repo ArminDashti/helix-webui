@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
 import {
+  Activity,
   Database,
   RefreshCw,
   Save,
@@ -23,8 +24,10 @@ import FlashMessage from "../components/FlashMessage.jsx";
 import IconButton from "../components/IconButton.jsx";
 import ModelCombobox from "../components/ModelCombobox.jsx";
 import PageHeader from "../components/PageHeader.jsx";
-import useFlash from "../lib/useFlash.js";
 import { useApiStatus } from "../context/ApiStatusContext.jsx";
+import useFlash from "../lib/useFlash.js";
+import { compareAz, sortByLabel, sortStrings } from "../utils/sortOptions.js";
+import { agentCompanyLabel } from "../utils/agentLabel.js";
 
 const EMPTY_DB = {
   engine: "sqlite",
@@ -40,16 +43,37 @@ const EMPTY_DB = {
   path: "",
 };
 
-const DB_ENGINES = [
+const DB_ENGINES = sortByLabel([
   { value: "sqlite", label: "AdventureWorks" },
   { value: "postgresql", label: "PostgreSQL" },
   { value: "sqlserver", label: "SQL Server" },
-];
+]);
+
+function isSampleDbName(name) {
+  const base = String(name || "")
+    .replace(/\\/g, "/")
+    .split("/")
+    .pop()
+    ?.toLowerCase();
+  return (
+    base === "helix-sample.sqlite" ||
+    base === "adventureworks-lt.sqlite" ||
+    base === "sample.sqlite"
+  );
+}
+
+const SSL_MODES = sortStrings([
+  "disable",
+  "prefer",
+  "require",
+  "verify-ca",
+  "verify-full",
+]);
 
 const EMPTY_OPENROUTER = {
   token: "",
   app_name: "Helix",
-  default_model: "openai/gpt-4o-mini",
+  default_model: "auto",
   agents: {},
   token_configured: false,
 };
@@ -57,7 +81,7 @@ const EMPTY_OPENROUTER = {
 const EMPTY_CURSOR = {
   token: "",
   app_name: "Helix",
-  default_model: "composer-2",
+  default_model: "auto",
   agents: {},
   token_configured: false,
 };
@@ -65,6 +89,7 @@ const EMPTY_CURSOR = {
 const TABS = [
   { id: "llm", label: "LLM" },
   { id: "database", label: "Database" },
+  { id: "status", label: "Status logs" },
 ];
 
 const TAB_ALIASES = {
@@ -74,7 +99,145 @@ const TAB_ALIASES = {
   cursor: "llm",
   sql: "database",
   connection: "llm",
+  logs: "status",
 };
+
+function tabIcon(tabId) {
+  if (tabId === "database") return Database;
+  if (tabId === "status") return Activity;
+  return SettingsIcon;
+}
+
+function isConnectedStatus(status) {
+  return status === "connected" || status === "configured";
+}
+
+function formatClock(iso) {
+  if (!iso) return "—";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return date.toLocaleString();
+}
+
+function StatusLogsSection() {
+  const { health, checking, lastFetchError, statusLog, checkConnection } =
+    useApiStatus();
+  const providerKey = health?.provider === "cursor" ? "cursor" : "openrouter";
+  const current = {
+    llm: {
+      status: health?.[providerKey]?.status,
+      detail: health
+        ? health[providerKey]?.detail || ""
+        : lastFetchError
+          ? [lastFetchError.message, lastFetchError.detail]
+              .filter(Boolean)
+              .join(" — ")
+          : "Cannot reach the API",
+      checked_at: health?.[providerKey]?.checked_at,
+    },
+    engine: {
+      status: health?.api?.status,
+      detail: health
+        ? health.api?.detail || ""
+        : lastFetchError
+          ? [lastFetchError.message, lastFetchError.detail]
+              .filter(Boolean)
+              .join(" — ")
+          : "Cannot reach the API",
+      checked_at: health?.api?.checked_at,
+    },
+    database: {
+      status: health?.database?.status,
+      detail: health
+        ? health.database?.detail || ""
+        : "Engine unreachable; database status unknown",
+      checked_at: health?.database?.checked_at,
+    },
+  };
+
+  return (
+    <section className="space-y-3 rounded-2xl border border-line/80 bg-paper/80 p-4 backdrop-blur-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
+            Status logs
+          </h2>
+          <p className="mt-1 text-sm text-muted">
+            Why LLM, Engine, and Database show disconnected. Events stay in this
+            browser tab until you reload.
+          </p>
+        </div>
+        <IconButton
+          type="button"
+          icon={RefreshCw}
+          onClick={() => checkConnection({ silent: false })}
+          className="rounded-xl border border-line bg-fog/40 px-3 py-2 text-sm font-medium text-ink hover:bg-fog"
+        >
+          {checking ? "Checking…" : "Check now"}
+        </IconButton>
+      </div>
+      <div className="grid gap-3 md:grid-cols-3">
+        {[
+          { id: "llm", label: "LLM" },
+          { id: "engine", label: "Engine" },
+          { id: "database", label: "Database" },
+        ].map((svc) => {
+          const block = current[svc.id];
+          const connected = isConnectedStatus(block.status);
+          const state =
+            checking && !block.status
+              ? "Checking…"
+              : connected
+                ? "Connected"
+                : "Disconnected";
+          const events = [...statusLog]
+            .filter((evt) => evt.service === svc.id)
+            .reverse();
+          return (
+            <div
+              key={svc.id}
+              className="flex min-h-0 flex-col rounded-xl border border-line/80 bg-fog/30 p-3"
+            >
+              <p className="text-sm font-semibold text-ink">{svc.label}</p>
+              <p
+                className={`mt-1 text-sm font-medium ${
+                  connected ? "text-moss" : "text-danger"
+                }`}
+              >
+                {state}
+                {block.status && !connected ? ` (${block.status})` : ""}
+              </p>
+              <p className="mt-1 text-xs text-muted">
+                Checked {formatClock(block.checked_at)}
+              </p>
+              <p className="mt-2 text-sm text-ink">
+                {block.detail || "No disconnect reason."}
+              </p>
+              <ul className="mt-3 max-h-48 space-y-2 overflow-y-auto text-xs">
+                {events.length === 0 ? (
+                  <li className="text-muted">No events yet.</li>
+                ) : (
+                  events.map((evt, index) => (
+                    <li
+                      key={`${evt.at}-${evt.status}-${index}`}
+                      className="rounded-lg border border-line/70 bg-paper/80 px-2 py-1.5"
+                    >
+                      <p className="text-muted">{formatClock(evt.at)}</p>
+                      <p className="font-medium text-ink">{evt.status}</p>
+                      {evt.detail ? (
+                        <p className="mt-0.5 break-words text-ink">{evt.detail}</p>
+                      ) : null}
+                    </li>
+                  ))
+                )}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
 
 export default function SettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -115,63 +278,65 @@ export default function SettingsPage() {
     (async () => {
       const failures = [];
       let anyOk = false;
-
       try {
-        const agents = await fetchAgents();
-        const map = {};
-        for (const a of agents || []) {
-          if (a?.id) map[a.id] = a.name || a.id;
+        try {
+          const agents = await fetchAgents();
+          const map = {};
+          for (const a of agents || []) {
+            if (a?.id) map[a.id] = agentCompanyLabel(a);
+          }
+          setAgentNameById(map);
+          anyOk = true;
+        } catch (err) {
+          failures.push(
+            `Agents: ${err instanceof Error ? err.message : "Failed to load"}`,
+          );
         }
-        setAgentNameById(map);
-        anyOk = true;
-      } catch (err) {
-        failures.push(
-          `Agents: ${err instanceof Error ? err.message : "Failed to load"}`,
-        );
-      }
 
-      try {
-        const dbData = await fetchDatabaseSettings();
-        setDbForm({ ...EMPTY_DB, ...dbData.database });
-        setConnectionString(dbData.connection_string || "");
-        anyOk = true;
-      } catch (err) {
-        failures.push(
-          `Database: ${err instanceof Error ? err.message : "Failed to load"}`,
-        );
-      }
+        try {
+          const dbData = await fetchDatabaseSettings();
+          setDbForm({ ...EMPTY_DB, ...dbData.database });
+          setConnectionString(dbData.connection_string || "");
+          anyOk = true;
+        } catch (err) {
+          failures.push(
+            `Database: ${err instanceof Error ? err.message : "Failed to load"}`,
+          );
+        }
 
-      try {
-        const orData = await fetchOpenRouterSettings();
-        setOrForm({ ...EMPTY_OPENROUTER, ...orData.openrouter, token: "" });
-        anyOk = true;
-      } catch (err) {
-        failures.push(`OpenRouter: ${err instanceof Error ? err.message : "Failed to load"}`);
-      }
+        try {
+          const orData = await fetchOpenRouterSettings();
+          setOrForm({ ...EMPTY_OPENROUTER, ...orData.openrouter, token: "" });
+          anyOk = true;
+        } catch (err) {
+          failures.push(`OpenRouter: ${err instanceof Error ? err.message : "Failed to load"}`);
+        }
 
-      try {
-        const cursorData = await fetchCursorSettings();
-        setCursorForm({ ...EMPTY_CURSOR, ...cursorData.cursor, token: "" });
-        anyOk = true;
-      } catch (err) {
-        failures.push(`Cursor: ${err instanceof Error ? err.message : "Failed to load"}`);
-      }
+        try {
+          const cursorData = await fetchCursorSettings();
+          setCursorForm({ ...EMPTY_CURSOR, ...cursorData.cursor, token: "" });
+          anyOk = true;
+        } catch (err) {
+          failures.push(`Cursor: ${err instanceof Error ? err.message : "Failed to load"}`);
+        }
 
-      try {
-        const providerData = await fetchProviderSettings();
-        setProvider(providerData.provider || "openrouter");
-        anyOk = true;
-      } catch (err) {
-        failures.push(`LLM: ${err instanceof Error ? err.message : "Failed to load"}`);
-      }
+        try {
+          const providerData = await fetchProviderSettings();
+          setProvider(providerData.provider || "openrouter");
+          anyOk = true;
+        } catch (err) {
+          failures.push(`LLM: ${err instanceof Error ? err.message : "Failed to load"}`);
+        }
 
-      setSectionErrors(failures);
-      if (!anyOk && failures.length) {
-        setError("API unreachable — could not load any settings section.");
-      } else if (failures.length) {
-        setError(null);
+        setSectionErrors(failures);
+        if (!anyOk && failures.length) {
+          setError("API unreachable — could not load any settings section.");
+        } else if (failures.length) {
+          setError(null);
+        }
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     })();
   }, []);
 
@@ -238,11 +403,21 @@ export default function SettingsPage() {
         next.port = defaultPortForEngine(value);
         if (value === "sqlite") {
           next.name = "helix-sample.sqlite";
+          next.host = "";
+          next.path = "";
+        } else {
+          if (isSampleDbName(next.name) || isSampleDbName(next.path)) {
+            next.name = "";
+          }
+          next.path = "";
         }
       }
       return next;
     });
     setConnectionStringDirty(false);
+    if (key === "engine") {
+      setConnectionString("");
+    }
   }
 
   function updateOrField(key, value) {
@@ -299,14 +474,26 @@ export default function SettingsPage() {
     setError(null);
     setStatus(null);
     try {
-      const payload = connectionStringDirty
-        ? { connection_string: connectionString }
-        : dbForm.engine === "sqlite"
-          ? { engine: "sqlite", name: "helix-sample.sqlite" }
-          : {
-            ...dbForm,
-            port: Number(dbForm.port) || defaultPortForEngine(dbForm.engine),
-          };
+      const engine = dbForm.engine || "sqlite";
+      const trimmedConn = (connectionString || "").trim();
+      const staleSqliteConn = trimmedConn.toLowerCase().startsWith("file:");
+      const payload =
+        connectionStringDirty && trimmedConn && !(engine !== "sqlite" && staleSqliteConn)
+          ? { connection_string: trimmedConn, engine }
+          : engine === "sqlite"
+            ? { engine: "sqlite", name: "helix-sample.sqlite" }
+            : {
+                engine,
+                host: dbForm.host,
+                port: Number(dbForm.port) || defaultPortForEngine(engine),
+                name: dbForm.name,
+                user: dbForm.user,
+                password: dbForm.password,
+                driver: dbForm.driver,
+                sslmode: dbForm.sslmode,
+                encrypt: dbForm.encrypt,
+                trust_server_certificate: dbForm.trust_server_certificate,
+              };
       const data = await saveDatabaseSettings(payload);
       setDbForm({ ...EMPTY_DB, ...data.database });
       setConnectionString(data.connection_string || "");
@@ -363,13 +550,17 @@ export default function SettingsPage() {
     return <p className="text-sm text-muted">Loading settings…</p>;
   }
 
-  const agentIds = Object.keys(orForm.agents || {}).length
-    ? Object.keys(orForm.agents)
-    : Object.keys(agentNameById);
+  const agentIds = sortStrings(
+    Object.keys(orForm.agents || {}).length
+      ? Object.keys(orForm.agents)
+      : Object.keys(agentNameById),
+  ).sort((a, b) => compareAz(agentLabel(a), agentLabel(b)));
 
-  const cursorAgentIds = Object.keys(cursorForm.agents || {}).length
-    ? Object.keys(cursorForm.agents)
-    : Object.keys(agentNameById);
+  const cursorAgentIds = sortStrings(
+    Object.keys(cursorForm.agents || {}).length
+      ? Object.keys(cursorForm.agents)
+      : Object.keys(agentNameById),
+  ).sort((a, b) => compareAz(agentLabel(a), agentLabel(b)));
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
@@ -386,7 +577,7 @@ export default function SettingsPage() {
               key={tab.id}
               type="button"
               role="tab"
-              icon={tab.id === "database" ? Database : SettingsIcon}
+              icon={tabIcon(tab.id)}
               aria-selected={activeSection === tab.id}
               onClick={() => setActiveSection(tab.id)}
               className={[
@@ -420,6 +611,8 @@ export default function SettingsPage() {
         ) : null}
         <FlashMessage message={status} />
 
+      {activeSection === "status" ? <StatusLogsSection /> : null}
+
       {activeSection === "llm" ? (
         <>
         <section className="space-y-3 rounded-2xl border border-line/80 bg-paper/80 p-4 backdrop-blur-sm">
@@ -427,8 +620,9 @@ export default function SettingsPage() {
             LLM
           </h2>
           <p className="text-sm text-muted">
-            Choose which LLM provider Helix uses for analysis runs, then
-            configure OpenRouter and Cursor.
+            Analysis runs call an OpenAI-compatible chat API. Use OpenRouter
+            for that. Cursor Cloud API can list models but has no
+            chat-completions route.
           </p>
           <div className="flex flex-wrap gap-2">
             {[
@@ -528,7 +722,7 @@ export default function SettingsPage() {
                 >
                   <ModelCombobox
                     id={`agent-${agentId}`}
-                    value={orForm.agents?.[agentId]?.model || ""}
+                    value={orForm.agents?.[agentId]?.model || "auto"}
                     onChange={(v) => updateAgentModel(agentId, v)}
                     models={models}
                     loading={modelsLoading}
@@ -644,7 +838,7 @@ export default function SettingsPage() {
                 >
                   <ModelCombobox
                     id={`cursor-agent-${agentId}`}
-                    value={cursorForm.agents?.[agentId]?.model || ""}
+                    value={cursorForm.agents?.[agentId]?.model || "auto"}
                     onChange={(v) =>
                       setCursorForm((prev) => ({
                         ...prev,
@@ -749,11 +943,11 @@ export default function SettingsPage() {
                       onChange={(e) => updateDbField("sslmode", e.target.value)}
                       className={inputClass}
                     >
-                      <option value="disable">disable</option>
-                      <option value="prefer">prefer</option>
-                      <option value="require">require</option>
-                      <option value="verify-ca">verify-ca</option>
-                      <option value="verify-full">verify-full</option>
+                      {SSL_MODES.map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
                     </select>
                   </Field>
                 ) : (

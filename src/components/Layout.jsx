@@ -6,20 +6,17 @@ import {
   Database,
   Monitor,
   Moon,
-  PanelLeftClose,
-  PanelLeftOpen,
   Play,
   Scale,
   Settings,
+  Shield,
   Sparkles,
   Sun,
   Table2,
   User,
 } from "lucide-react";
 import { useApiStatus } from "../context/ApiStatusContext.jsx";
-import IconButton from "./IconButton.jsx";
 
-const NAV_STORAGE_KEY = "helix-nav-collapsed";
 const THEME_STORAGE_KEY = "helix-theme";
 
 const MAIN_LINKS = [
@@ -33,6 +30,7 @@ const MAIN_LINKS = [
 ];
 
 const FOOTER_LINKS = [
+  { to: "/admin", label: "Admin", icon: Shield },
   { to: "/settings", label: "Settings", icon: Settings },
   { to: "/about-me", label: "About Me", icon: User },
 ];
@@ -95,7 +93,7 @@ function applyTheme(preference) {
   document.documentElement.setAttribute("data-theme", resolveTheme(preference));
 }
 
-function NavItem({ link, collapsed }) {
+function NavItem({ link }) {
   const Icon = link.icon;
   return (
     <NavLink
@@ -104,8 +102,7 @@ function NavItem({ link, collapsed }) {
       title={link.label}
       className={({ isActive }) =>
         [
-          "flex items-center rounded-xl text-sm font-medium transition",
-          collapsed ? "justify-center px-0 py-2" : "gap-2 px-3 py-2",
+          "flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition",
           isActive
             ? "bg-moss text-white"
             : "border border-line/80 bg-paper/80 text-ink hover:bg-fog",
@@ -113,29 +110,14 @@ function NavItem({ link, collapsed }) {
       }
     >
       <Icon className="size-4 shrink-0" aria-hidden="true" />
-      {!collapsed ? <span>{link.label}</span> : null}
+      <span>{link.label}</span>
     </NavLink>
   );
 }
 
 export default function Layout() {
   const { health, checking } = useApiStatus();
-  const [collapsed, setCollapsed] = useState(() => {
-    try {
-      return localStorage.getItem(NAV_STORAGE_KEY) === "1";
-    } catch {
-      return false;
-    }
-  });
   const [theme, setTheme] = useState(readThemePreference);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(NAV_STORAGE_KEY, collapsed ? "1" : "0");
-    } catch {
-      /* ignore */
-    }
-  }, [collapsed]);
 
   useEffect(() => {
     applyTheme(theme);
@@ -162,21 +144,10 @@ export default function Layout() {
   return (
     <div className="flex h-dvh overflow-hidden">
       <nav
-        className={[
-          "flex shrink-0 flex-col gap-1 border-r border-line/80 bg-paper/60 py-2 transition-[width] duration-200",
-          collapsed
-            ? "w-14 px-1.5"
-            : "w-[20%] min-w-[10rem] max-w-[14rem] px-2 sm:px-3",
-        ].join(" ")}
+        className="flex w-[20%] min-w-[10rem] max-w-[14rem] shrink-0 flex-col gap-1 border-r border-line/80 bg-paper/60 px-2 py-2 sm:px-3"
         aria-label="Main"
-        aria-expanded={!collapsed}
       >
-        <div
-          className={[
-            "mb-2 flex items-center gap-2 rounded-xl border border-line/80 bg-fog/30",
-            collapsed ? "justify-center px-1 py-2" : "px-2 py-2",
-          ].join(" ")}
-        >
+        <div className="mb-2 flex items-center gap-2 rounded-xl border border-line/80 bg-fog/30 px-2 py-2">
           <div
             className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line/70 bg-paper"
             aria-label="App logo"
@@ -190,82 +161,46 @@ export default function Layout() {
               height={28}
             />
           </div>
-          {!collapsed ? (
-            <div className="min-w-0">
-              <p className="truncate font-display text-sm font-semibold tracking-wide text-ink">
-                Helix
-              </p>
-              <p className="truncate text-[11px] text-muted">Analytics agents</p>
-            </div>
-          ) : null}
+          <div className="min-w-0">
+            <p className="truncate font-display text-sm font-semibold tracking-wide text-ink">
+              Helix
+            </p>
+            <p className="truncate text-[11px] text-muted">Analytics agents</p>
+          </div>
         </div>
 
-        <IconButton
-          type="button"
-          icon={collapsed ? PanelLeftOpen : PanelLeftClose}
-          onClick={() => setCollapsed((v) => !v)}
-          className="mb-1 rounded-lg border border-line/80 bg-fog/40 px-2 py-1.5 text-xs font-medium text-ink hover:bg-fog"
-          aria-label={collapsed ? "Expand menu" : "Collapse menu"}
-          title={collapsed ? "Expand menu" : "Collapse menu"}
-        >
-          {collapsed ? null : "Menu"}
-        </IconButton>
-
         {MAIN_LINKS.map((link) => (
-          <NavItem key={link.to} link={link} collapsed={collapsed} />
+          <NavItem key={link.to} link={link} />
         ))}
 
         <div className="mt-auto space-y-1 pt-2">
           {FOOTER_LINKS.map((link) => (
-            <NavItem key={link.to} link={link} collapsed={collapsed} />
+            <NavItem key={link.to} link={link} />
           ))}
 
-          <div
-            className={[
-              "block w-full rounded-xl border border-line/80 bg-fog/40 text-left text-[11px] font-medium",
-              collapsed ? "px-0 py-2 text-center" : "px-3 py-2",
-            ].join(" ")}
-            aria-label="LLM, Engine, and Database status"
+          <NavLink
+            to="/settings?tab=status"
+            title="Open status logs"
+            className="block w-full rounded-xl border border-line/80 bg-fog/40 px-3 py-2 text-left text-[11px] font-medium hover:bg-fog"
+            aria-label="LLM, Engine, and Database status. Open status logs."
           >
-            {collapsed ? (
-              <span className="inline-flex flex-col items-center gap-1.5 font-geek leading-none tracking-wide">
-                {[
-                  ["LLM", llmStatus],
-                  ["Engine", engineStatus],
-                  ["Database", dbStatus],
-                ].map(([label, status]) => (
-                  <span
-                    key={label}
-                    className={`inline-block size-2 rounded-full ${
-                      isConnectedStatus(status) ? "bg-moss" : "bg-danger"
-                    }`}
-                    title={`${label} ${formatLinkStatus(status, checking)}`}
-                    aria-label={`${label} ${formatLinkStatus(status, checking)}`}
-                  />
-                ))}
-              </span>
-            ) : (
-              <span className="grid w-full grid-cols-[auto_1fr] items-baseline gap-x-2 gap-y-1 font-geek tracking-wide">
-                <StatusLine status={llmStatus} label="LLM" checking={checking} />
-                <StatusLine
-                  status={engineStatus}
-                  label="Engine"
-                  checking={checking}
-                />
-                <StatusLine
-                  status={dbStatus}
-                  label="Database"
-                  checking={checking}
-                />
-              </span>
-            )}
-          </div>
+            <span className="grid w-full grid-cols-[auto_1fr] items-baseline gap-x-2 gap-y-1 font-geek tracking-wide">
+              <StatusLine status={llmStatus} label="LLM" checking={checking} />
+              <StatusLine
+                status={engineStatus}
+                label="Engine"
+                checking={checking}
+              />
+              <StatusLine
+                status={dbStatus}
+                label="Database"
+                checking={checking}
+              />
+            </span>
+          </NavLink>
 
           <div
-            className={[
-              "flex gap-1 rounded-xl border border-line/80 bg-fog/40 p-1",
-              collapsed ? "flex-col items-center" : "flex-row",
-            ].join(" ")}
+            className="flex flex-row gap-1 rounded-xl border border-line/80 bg-fog/40 p-1"
             role="group"
             aria-label="Theme"
           >
@@ -282,7 +217,7 @@ export default function Layout() {
                   aria-pressed={active}
                   className={[
                     "flex flex-1 items-center justify-center rounded-lg py-1.5 transition",
-                    collapsed ? "w-full px-0" : "px-2",
+                    "px-2",
                     active
                       ? "bg-moss text-white"
                       : "text-ink hover:bg-fog",
@@ -293,18 +228,9 @@ export default function Layout() {
               );
             })}
           </div>
-          {collapsed ? (
-            <p
-              className="rounded-xl border border-line/80 bg-fog/40 px-1 py-1.5 text-center text-[11px] font-medium leading-tight text-muted"
-              title="Created by Armin and Cursor"
-            >
-              A+C
-            </p>
-          ) : (
-            <p className="rounded-xl border border-line/80 bg-fog/40 px-2 py-1.5 text-center text-sm leading-snug text-muted">
-              Created by Armin and Cursor
-            </p>
-          )}
+          <p className="rounded-xl border border-line/80 bg-fog/40 px-2 py-1.5 text-center text-sm leading-snug text-muted">
+            Created by Armin and Cursor
+          </p>
         </div>
       </nav>
       <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto p-2 sm:p-3">

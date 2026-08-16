@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Code2, Eye, Pencil, Save, Trash2 } from "lucide-react";
 import { renderMarkdownToHtml } from "../lib/markdownPreview.js";
+import { agentCompanyLabel } from "../utils/agentLabel.js";
 import FlashMessage from "./FlashMessage.jsx";
 import IconButton from "./IconButton.jsx";
 import PageHeader from "./PageHeader.jsx";
@@ -136,7 +137,7 @@ export default function AgentScopedMarkdownPage({
                       : "hover:bg-fog text-ink",
                   ].join(" ")}
                 >
-                  {agent.name}
+                  {agentCompanyLabel(agent)}
                 </button>
               </li>
             ))}

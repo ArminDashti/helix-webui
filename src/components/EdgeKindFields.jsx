@@ -4,6 +4,8 @@ import {
   EDGE_KINDS,
   fieldsForKind,
 } from "../pipeline/pipelineFlow.js";
+import { sortByLabel } from "../utils/sortOptions.js";
+import { agentCompanyLabel } from "../utils/agentLabel.js";
 
 export default function EdgeKindFields({
   kind,
@@ -33,7 +35,7 @@ export default function EdgeKindFields({
             onChange={(e) => patch({ kind: e.target.value })}
             className="mt-1 w-full rounded-xl border border-line bg-fog/40 px-3 py-1.5 text-sm outline-none focus:border-moss"
           >
-            {EDGE_KINDS.map((opt) => (
+            {sortByLabel(EDGE_KINDS).map((opt) => (
               <option key={opt.value} value={opt.value}>
                 {opt.label}
               </option>
@@ -67,9 +69,9 @@ export default function EdgeKindFields({
             onChange={(e) => patch({ target: e.target.value })}
             className="mt-1 w-full rounded-xl border border-line bg-fog/40 px-3 py-1.5 text-sm outline-none focus:border-moss"
           >
-            {agents.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name || a.id}
+            {sortByLabel(agents, (a) => agentCompanyLabel(a)).map((a) => (
+              <option key={a.id} value={a.id} title={a.id}>
+                {agentCompanyLabel(a)}
               </option>
             ))}
           </select>

@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { compareAz } from "../utils/sortOptions.js";
 
 function modelId(m) {
   if (m == null) return "";
@@ -44,17 +45,20 @@ export default function ModelCombobox({
     return () => document.removeEventListener("mousedown", onDocClick);
   }, [value]);
 
-  const normalized = useMemo(
-    () =>
-      (Array.isArray(models) ? models : [])
-        .map((m) => {
-          const idValue = modelId(m);
-          if (!idValue) return null;
-          return { id: idValue, name: modelName(m) || idValue };
-        })
-        .filter(Boolean),
-    [models],
-  );
+  const normalized = useMemo(() => {
+    const list = (Array.isArray(models) ? models : [])
+      .map((m) => {
+        const idValue = modelId(m);
+        if (!idValue) return null;
+        return { id: idValue, name: modelName(m) || idValue };
+      })
+      .filter(Boolean);
+    if (!list.some((m) => m.id.toLowerCase() === "auto")) {
+      list.push({ id: "auto", name: "Auto" });
+    }
+    list.sort((a, b) => compareAz(a.name, b.name) || compareAz(a.id, b.id));
+    return list;
+  }, [models]);
 
   const filtered = useMemo(() => {
     const q = String(query || "")

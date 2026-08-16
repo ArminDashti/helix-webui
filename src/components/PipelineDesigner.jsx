@@ -13,13 +13,13 @@ import useFlash from "../lib/useFlash.js";
 import {
   cloneFlow,
   compileFlow,
-  emptySequence,
+  emptyStages,
   mergeGraphPositions,
   validateFlow,
 } from "../pipeline/pipelineFlow.js";
 
 export default function PipelineDesigner({ agents, mode }) {
-  const [flow, setFlow] = useState(emptySequence());
+  const [flow, setFlow] = useState(emptyStages());
   const [graph, setGraph] = useState({ entry: null, nodes: [], edges: [] });
   const [arrangeCompatible, setArrangeCompatible] = useState(true);
   const [arrangeError, setArrangeError] = useState(null);
@@ -30,7 +30,7 @@ export default function PipelineDesigner({ agents, mode }) {
 
   const applyBundle = useCallback((bundle) => {
     setGraph(bundle.pipeline_graph || { entry: null, nodes: [], edges: [] });
-    setFlow(bundle.pipeline_flow || emptySequence());
+    setFlow(bundle.pipeline_flow || emptyStages());
     setArrangeCompatible(Boolean(bundle.arrange_compatible));
     setArrangeError(bundle.arrange_error || null);
   }, []);
@@ -122,7 +122,7 @@ export default function PipelineDesigner({ agents, mode }) {
   function onGraphChange(updater) {
     setGraph((prev) => (typeof updater === "function" ? updater(prev) : updater));
     setArrangeCompatible(false);
-    setArrangeError("Arrange needs a single Then/Else per If.");
+    setArrangeError("Arrange needs one IF per stage.");
   }
 
   if (loading) {
@@ -136,7 +136,7 @@ export default function PipelineDesigner({ agents, mode }) {
     <div className="flex min-h-0 flex-1 flex-col gap-2">
       {unstructured && showArrange ? (
         <p className="shrink-0 rounded-xl border border-warn-border bg-warn-bg px-4 py-2 text-sm text-warn">
-          {arrangeError || "Arrange needs a single Then/Else per If."} Open Graph
+          {arrangeError || "Arrange needs one IF per stage."} Open Graph
           to edit this pipeline, or reset to the default flow.
         </p>
       ) : null}

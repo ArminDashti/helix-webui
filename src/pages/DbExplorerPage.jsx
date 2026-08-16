@@ -7,6 +7,7 @@ import {
 } from "../api/client.js";
 import IconButton from "../components/IconButton.jsx";
 import PageHeader from "../components/PageHeader.jsx";
+import { compareAz, sortStrings } from "../utils/sortOptions.js";
 
 const LIMITS = [16, 32, 64, 128];
 const WHERE_PLACEHOLDER = "e.g. Status = Active AND Amount > 0";
@@ -30,7 +31,9 @@ export default function DbExplorerPage() {
     (async () => {
       try {
         const data = await fetchDbExplorerTables();
-        const list = data.tables || [];
+        const list = [...(data.tables || [])].sort((a, b) =>
+          compareAz(a.full_name, b.full_name),
+        );
         setTables(list);
         if (list[0]?.full_name) setTable(list[0].full_name);
       } catch (err) {
@@ -51,7 +54,9 @@ export default function DbExplorerPage() {
       try {
         const data = await fetchDbExplorerColumns(table);
         if (cancelled) return;
-        const cols = data.columns || [];
+        const cols = [...(data.columns || [])].sort((a, b) =>
+          compareAz(a.name, b.name),
+        );
         setColumns(cols);
         setOrderBy((prev) => prev || cols[0]?.name || "");
       } catch {
@@ -63,7 +68,10 @@ export default function DbExplorerPage() {
     };
   }, [table]);
 
-  const columnNames = useMemo(() => columns.map((c) => c.name), [columns]);
+  const columnNames = useMemo(
+    () => sortStrings(columns.map((c) => c.name)),
+    [columns],
+  );
 
   const filteredTables = useMemo(() => {
     const q = tableFilter.trim().toLowerCase();

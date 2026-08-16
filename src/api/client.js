@@ -143,11 +143,16 @@ export async function fetchAgents() {
   return data.agents;
 }
 
-export async function createAgent({ id, name, description = "", instruction = "" }) {
+export async function createAgent({
+  id,
+  name,
+  description = "",
+  human_name = "",
+}) {
   return requestJson("/api/agents/", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id, name, description, instruction }),
+    body: JSON.stringify({ id, name, description, human_name }),
   });
 }
 
@@ -165,23 +170,20 @@ export async function renameAgent(agentId, name) {
   });
 }
 
+export async function updateAgent(agentId, payload) {
+  return requestJson(`/api/agents/${encodeURIComponent(agentId)}/`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function setAgentDisabled(agentId, disabled) {
   return requestJson(`/api/agents/${encodeURIComponent(agentId)}/`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ disabled }),
   });
-}
-
-export async function updateAgentInstruction(agentId, instruction) {
-  return requestJson(
-    `/api/agents/${encodeURIComponent(agentId)}/instruction/`,
-    {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ instruction }),
-    },
-  );
 }
 
 export async function fetchReferences() {
@@ -330,6 +332,33 @@ export async function saveProvider(provider) {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ provider }),
+  });
+}
+
+export async function fetchUsers() {
+  const data = await requestJson("/api/admin/users/");
+  return data.users;
+}
+
+export async function createUser(payload) {
+  return requestJson("/api/admin/users/", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateUser(userId, payload) {
+  return requestJson(`/api/admin/users/${encodeURIComponent(userId)}/`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteUser(userId) {
+  return requestJson(`/api/admin/users/${encodeURIComponent(userId)}/`, {
+    method: "DELETE",
   });
 }
 
@@ -556,7 +585,7 @@ export async function streamRun(
         const apiErr = new ApiError({
           kind: "stream",
           title: "Run stream failed",
-          message: payload.message || "Run failed",
+          message: payload.error || payload.message || "Run failed",
           path,
         });
         emitApiError(apiErr);
@@ -576,123 +605,4 @@ export async function streamRun(
     throw apiErr;
   }
   return result;
-}
-
-/** Sample payload so the UI can be reviewed without a running backend. */
-export function getDemoResult(
-  mode,
-  { language = "en", report_type = "summary", chart_type = "bar", columns } = {},
-) {
-  const normalized =
-    mode === "analysis"
-      ? "analytical_report"
-      : mode === "both"
-        ? "analytical_report_chart"
-        : mode || "auto";
-
-  const title = language === "fa" ? "درآمد بر اساس منطقه" : "Revenue by region";
-  const cats =
-    language === "fa"
-      ? ["شمال", "جنوب", "شرق", "غرب"]
-      : ["North", "South", "East", "West"];
-  const values = [420, 310, 510, 280];
-
-  const echarts_option = {
-    color: ["#3d9b82", "#5cb89a", "#7ab89f"],
-    backgroundColor: "transparent",
-    title: {
-      text: title,
-      left: "center",
-      textStyle: { color: "#e6ebe9", fontWeight: 600, fontSize: 16 },
-    },
-    tooltip: {
-      trigger: chart_type === "pie" || chart_type === "donut" ? "item" : "axis",
-      backgroundColor: "#24302d",
-      borderColor: "#3a4a45",
-      textStyle: { color: "#e6ebe9" },
-    },
-    grid: { left: 48, right: 24, top: 56, bottom: 40 },
-    xAxis: {
-      type: "category",
-      data: cats,
-      axisLabel: { color: "#9aada6" },
-      axisLine: { lineStyle: { color: "#3a4a45" } },
-    },
-    yAxis: {
-      type: "value",
-      name: language === "fa" ? "واحد" : "USD",
-      nameTextStyle: { color: "#9aada6" },
-      axisLabel: { color: "#9aada6" },
-      splitLine: { lineStyle: { color: "#3a4a45" } },
-      axisLine: { lineStyle: { color: "#3a4a45" } },
-    },
-    series: [
-      {
-        name: language === "fa" ? "درآمد" : "Revenue",
-        type: chart_type === "line" || chart_type === "area" ? "line" : "bar",
-        data: values,
-        ...(chart_type === "area" ? { areaStyle: {} } : {}),
-        barWidth: "48%",
-        itemStyle: { borderRadius: [6, 6, 0, 0] },
-      },
-    ],
-  };
-
-  const text_report =
-    language === "fa"
-      ? "شرق بیشترین درآمد را دارد. غرب نیاز به بهبود دارد. (نمونه دمو)"
-      : "North and East lead revenue this period. East is highest at 510; West trails at 280. (Demo sample — backend not connected.)";
-
-  const cols = columns?.length
-    ? columns
-    : language === "fa"
-      ? ["منطقه", "درآمد", "واحد"]
-      : ["Region", "Revenue", "Units"];
-  const grid = {
-    columns: cols,
-    rows: cats.map((region, i) => ({
-      [cols[0]]: region,
-      [cols[1]]: values[i],
-      [cols[2]]: [12, 9, 15, 7][i],
-    })),
-  };
-
-  if (normalized === "analytical_report") {
-    return {
-      mode: normalized,
-      language,
-      text_report,
-      echarts_option: null,
-      grid: null,
-      report_type,
-    };
-  }
-  if (normalized === "chart") {
-    return {
-      mode: normalized,
-      language,
-      text_report: null,
-      echarts_option,
-      grid: null,
-      chart_type,
-    };
-  }
-  if (normalized === "grid") {
-    return {
-      mode: normalized,
-      language,
-      text_report: null,
-      echarts_option: null,
-      grid,
-    };
-  }
-  return {
-    mode: normalized === "auto" ? "auto" : "analytical_report_chart",
-    language,
-    text_report,
-    echarts_option,
-    grid: null,
-    report_type,
-    chart_type,
-  };
 }

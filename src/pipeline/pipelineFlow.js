@@ -1,3 +1,5 @@
+import { agentCompanyLabel } from "../utils/agentLabel.js";
+
 export const DEFAULT_EDGE_LIMIT = 3;
 
 export const WHEN_OPTIONS = [
@@ -6,6 +8,22 @@ export const WHEN_OPTIONS = [
   { value: "on_failure", label: "Failed" },
   { value: "on_retry", label: "Retry" },
   { value: "on_status", label: "Result is" },
+];
+
+export const STAGE_ACTIONS = [
+  { value: "if", label: "IF" },
+  { value: "if_not", label: "IF NOT" },
+  { value: "proceed", label: "Go to" },
+];
+
+export const RESULT_OPS = [
+  { value: "equal", label: "Equal" },
+  { value: "not_equal", label: "Not Equal" },
+];
+
+export const THEN_ACTIONS = [
+  { value: "proceed", label: "Go to" },
+  { value: "stop", label: "STOP" },
 ];
 
 export const EDGE_KINDS = [
@@ -37,39 +55,32 @@ export function nextId(prefix) {
   return `${prefix}_${Date.now().toString(36)}_${_seq}`;
 }
 
+export function emptyStages() {
+  return { type: "stages", children: [] };
+}
+
 export function emptySequence() {
-  return { type: "sequence", children: [] };
+  return emptyStages();
 }
 
-export function newAgent(id) {
-  return { type: "agent", id };
-}
-
-export function newIf() {
+export function newStage(agentId, nextAgentId = "") {
   return {
-    type: "if",
-    id: nextId("if"),
-    when: { type: "on_failure" },
-    limit: DEFAULT_EDGE_LIMIT,
-    then: emptySequence(),
-    else: emptySequence(),
-  };
-}
-
-export function newLoop() {
-  return {
-    type: "loop",
-    id: nextId("loop"),
-    when: { type: "on_retry" },
-    limit: DEFAULT_EDGE_LIMIT,
-    body: emptySequence(),
+    type: "stage",
+    agent_id: agentId,
+    action: "proceed",
+    then: nextAgentId ? "proceed" : "stop",
+    ...(nextAgentId ? { next_agent_id: nextAgentId } : {}),
   };
 }
 
 export function collectAgentIds(block, out = []) {
   if (!block) return out;
   if (block.type === "agent" && block.id) out.push(block.id);
-  if (block.type === "sequence") {
+  if (block.type === "stage") {
+    if (block.agent_id) out.push(block.agent_id);
+    if (block.next_agent_id) out.push(block.next_agent_id);
+  }
+  if (block.type === "stages" || block.type === "sequence") {
     for (const child of block.children || []) collectAgentIds(child, out);
   }
   if (block.type === "if") {
@@ -81,179 +92,125 @@ export function collectAgentIds(block, out = []) {
 }
 
 export function firstAgentId(block) {
+  if (block?.type === "stages") {
+    return block.children?.[0]?.agent_id || null;
+  }
   const ids = collectAgentIds(block, []);
   return ids[0] || null;
 }
 
 export function cloneFlow(flow) {
-  return JSON.parse(JSON.stringify(flow || emptySequence()));
+  return JSON.parse(JSON.stringify(flow || emptyStages()));
 }
 
-function getSequence(root, path) {
-  if (!path.length) {
-    if (root.type !== "sequence") {
-      throw new Error("Root flow must be a sequence");
-    }
-    return root;
+export function insertStage(flow, index, stage) {
+  const next = cloneFlow(flow);
+  if (next.type !== "stages") next.type = "stages";
+  if (!Array.isArray(next.children)) next.children = [];
+  const at = Math.max(0, Math.min(index, next.children.length));
+  next.children.splice(at, 0, stage);
+  return next;
+}
+
+export function removeStage(flow, index) {
+  const next = cloneFlow(flow);
+  next.children.splice(index, 1);
+  return next;
+}
+
+export function patchStage(flow, index, patch) {
+  const next = cloneFlow(flow);
+  const stage = { ...next.children[index], ...patch };
+  if (stage.action === "proceed") {
+    delete stage.result_op;
+    delete stage.expected;
+    delete stage.result_field;
+    if (stage.then !== "stop") stage.then = "proceed";
+  } else {
+    stage.result_field = "result";
+    stage.result_op = stage.result_op || "equal";
+    if (stage.then !== "stop") stage.then = stage.then || "proceed";
   }
-  let seq = root;
-  for (let i = 0; i < path.length; i += 1) {
-    const key = path[i];
-    if (typeof key === "number") {
-      const child = seq.children[key];
-      if (!child) throw new Error("Invalid flow path");
-      if (i === path.length - 1) return seq;
-      seq = child;
-    } else if (key === "then" || key === "else") {
-      if (seq.type !== "if") throw new Error("Invalid flow path");
-      seq = seq[key];
-    } else if (key === "body") {
-      if (seq.type !== "loop") throw new Error("Invalid flow path");
-      seq = seq.body;
-    } else {
-      throw new Error("Invalid flow path");
-    }
-  }
-  if (seq.type !== "sequence") throw new Error("Path does not point at a sequence");
-  return seq;
+  if (stage.then === "stop") delete stage.next_agent_id;
+  next.children[index] = stage;
+  return next;
 }
 
 export function insertBlock(flow, seqPath, index, block) {
-  const next = cloneFlow(flow);
-  const seq = getSequence(next, seqPath);
-  const at = Math.max(0, Math.min(index, seq.children.length));
-  seq.children.splice(at, 0, block);
-  return next;
-}
-
-export function removeAt(flow, seqPath, index) {
-  const next = cloneFlow(flow);
-  const seq = getSequence(next, seqPath);
-  seq.children.splice(index, 1);
-  return next;
-}
-
-export function moveWithin(flow, seqPath, fromIndex, toIndex) {
-  const next = cloneFlow(flow);
-  const seq = getSequence(next, seqPath);
-  if (fromIndex < 0 || fromIndex >= seq.children.length) return next;
-  const [item] = seq.children.splice(fromIndex, 1);
-  const at = Math.max(0, Math.min(toIndex, seq.children.length));
-  seq.children.splice(at, 0, item);
-  return next;
-}
-
-export function updateAt(flow, seqPath, index, patch) {
-  const next = cloneFlow(flow);
-  const seq = getSequence(next, seqPath);
-  seq.children[index] = { ...seq.children[index], ...patch };
-  return next;
-}
-
-export function findBlockPath(flow, predicate, seqPath = []) {
-  const children = flow?.children || [];
-  for (let index = 0; index < children.length; index += 1) {
-    const child = children[index];
-    if (predicate(child)) return { seqPath, index };
-    if (child.type === "if") {
-      const t = findBlockPath(child.then, predicate, [...seqPath, index, "then"]);
-      if (t) return t;
-      const e = findBlockPath(child.else, predicate, [...seqPath, index, "else"]);
-      if (e) return e;
-    }
-    if (child.type === "loop") {
-      const b = findBlockPath(child.body, predicate, [...seqPath, index, "body"]);
-      if (b) return b;
-    }
+  if (flow?.type === "stages") {
+    const stage =
+      block?.type === "stage"
+        ? block
+        : newStage(block.id || block.agent_id, "");
+    return insertStage(flow, index, stage);
   }
-  return null;
-}
-
-export function wrapAgentInLoop(flow, agentId) {
-  const found = findBlockPath(flow, (b) => b.type === "agent" && b.id === agentId);
-  if (!found) return flow;
-  const next = cloneFlow(flow);
-  const seq = getSequence(next, found.seqPath);
-  const block = seq.children[found.index];
-  seq.children[found.index] = { ...newLoop(), body: { type: "sequence", children: [block] } };
-  return next;
+  return flow;
 }
 
 export function insertAfterAgent(flow, agentId, block) {
-  const found = findBlockPath(flow, (b) => b.type === "agent" && b.id === agentId);
-  if (!found) {
+  if (flow?.type !== "stages") {
     return insertBlock(flow, [], (flow.children || []).length, block);
   }
-  return insertBlock(flow, found.seqPath, found.index + 1, block);
+  const idx = (flow.children || []).findIndex((s) => s.agent_id === agentId);
+  const stage =
+    block?.type === "stage" ? block : newStage(block.id || block.agent_id, "");
+  return insertStage(flow, idx < 0 ? (flow.children || []).length : idx + 1, stage);
 }
 
 export function validateFlow(flow) {
   const errors = [];
-  const ids = collectAgentIds(flow, []);
-  if (!ids.length) errors.push("Add at least one agent.");
-  const dup = ids.find((id, i) => ids.indexOf(id) !== i);
-  if (dup) errors.push(`Agent ${dup} is already on the flow.`);
-
-  function walk(block, parentKind) {
-    if (!block) return;
-    if (block.type === "sequence") {
-      (block.children || []).forEach((child, i) => {
-        if (child.type === "if") {
-          const before = (block.children || []).slice(0, i);
-          const hasAgentBefore =
-            parentKind === "root"
-              ? before.some(
-                  (c) =>
-                    c.type === "agent" ||
-                    c.type === "loop" ||
-                    (c.type === "if" && collectAgentIds(c, []).length),
-                )
-              : true;
-          if (!hasAgentBefore && parentKind === "root" && i === 0) {
-            errors.push("If / Else needs an agent before it.");
-          }
-          const thenN = collectAgentIds(child.then, []).length;
-          const elseN = collectAgentIds(child.else, []).length;
-          if (thenN === 0 && elseN > 0) {
-            errors.push("If / Else needs a Then branch when Else is filled.");
-          }
-          walk(child.then, "then");
-          walk(child.else, "else");
-        } else if (child.type === "loop") {
-          if (!collectAgentIds(child.body, []).length) {
-            errors.push("Loop needs at least one agent in its body.");
-          }
-          walk(child.body, "body");
-        }
-      });
-    }
+  if (!flow || flow.type !== "stages") {
+    errors.push("Arrange uses one IF per stage.");
+    return errors;
   }
-  walk(flow, "root");
+  const children = flow.children || [];
+  if (!children.length) errors.push("Add at least one stage.");
+  children.forEach((stage, index) => {
+    if (stage.type !== "stage") {
+      errors.push(`Stage ${index + 1} is invalid.`);
+      return;
+    }
+    if (!stage.agent_id) errors.push(`Stage ${index + 1} needs an agent.`);
+    if (!["if", "if_not", "proceed"].includes(stage.action)) {
+      errors.push(`Stage ${index + 1} action must be IF, IF NOT, or Go to.`);
+    }
+    if (stage.action === "if" && children.filter((s) => s.action === "if").length) {
+      /* counted below */
+    }
+    if (stage.action === "proceed") {
+      if (stage.then !== "stop" && !stage.next_agent_id) {
+        errors.push(`Stage ${index + 1} Go to needs a next agent.`);
+      }
+    } else {
+      if (!stage.expected) errors.push(`Stage ${index + 1} needs a result value.`);
+      if (!["equal", "not_equal"].includes(stage.result_op || "equal")) {
+        errors.push(`Stage ${index + 1} Results must be Equal or Not Equal.`);
+      }
+      if (!["proceed", "stop"].includes(stage.then || "proceed")) {
+        errors.push(`Stage ${index + 1} THEN must be Go to or STOP.`);
+      }
+      if ((stage.then || "proceed") === "proceed" && !stage.next_agent_id) {
+        errors.push(`Stage ${index + 1} THEN Go to needs a next agent.`);
+      }
+    }
+  });
   return errors;
 }
 
 export function layoutPositions(flow) {
   const positions = {};
   let y = 40;
-  function walk(block, depth) {
-    if (!block) return;
-    if (block.type === "agent") {
-      positions[block.id] = { x: 80 + depth * 48, y };
-      y += 110;
-      return;
+  const ids = [];
+  for (const stage of flow?.children || []) {
+    if (stage.agent_id && !ids.includes(stage.agent_id)) ids.push(stage.agent_id);
+    if (stage.next_agent_id && !ids.includes(stage.next_agent_id)) {
+      ids.push(stage.next_agent_id);
     }
-    if (block.type === "sequence") {
-      for (const child of block.children || []) walk(child, depth);
-      return;
-    }
-    if (block.type === "if") {
-      walk(block.then, depth + 1);
-      walk(block.else, depth + 1);
-      return;
-    }
-    if (block.type === "loop") walk(block.body, depth + 1);
   }
-  walk(flow, 0);
+  for (const id of ids) {
+    positions[id] = { x: 80, y };
+    y += 110;
+  }
   return positions;
 }
 
@@ -264,133 +221,51 @@ function applyPositions(nodes, positions) {
   }));
 }
 
-/** Compile flow to pipeline_graph (mirrors backend kinds / first-match order). */
 export function compileFlow(flow, positions = {}) {
-  const nodes = [];
-  const edges = [];
-  const seen = new Set();
-  const usedEdgeIds = new Set();
-  let y = 0;
-
-  function addAgent(id, depth) {
-    if (seen.has(id)) throw new Error(`Duplicate node id: ${id}`);
-    seen.add(id);
-    const pos = positions[id] || { x: depth * 48, y };
-    y = Math.max(y, pos.y + 100);
-    nodes.push({ id, position: pos });
+  if (flow?.type !== "stages") {
+    throw new Error("pipeline_flow must be stages");
   }
-
-  function addEdge(source, target, when, extra = {}) {
-    const role = extra.role;
-    const kind =
-      extra.kind ||
-      inferEdgeKind({ role, when, kind: extra.kind });
-    const limit = extra.limit != null ? extra.limit : DEFAULT_EDGE_LIMIT;
-    let id = extra.id;
-    if (!id) {
-      if (kind === "forward") id = `e_fwd_${source}_${target}`;
-      else if (kind === "back") id = `e_back_${extra.blockId || source}`;
-      else if (kind === "result_is") {
-        id = extra.blockId
-          ? `e_result_${extra.blockId}_${role || "then"}`
-          : `e_result_${source}_${target}`;
-      } else if (kind === "if" && extra.blockId && role) {
-        id = `e_if_${extra.blockId}_${role}`;
-      } else id = `e_${kind}_${source}_${target}`;
+  const errs = validateFlow(flow);
+  if (errs.length) throw new Error(errs[0]);
+  const nodeIds = [];
+  for (const stage of flow.children || []) {
+    for (const id of [stage.agent_id, stage.next_agent_id]) {
+      if (id && !nodeIds.includes(id)) nodeIds.push(id);
     }
-    if (usedEdgeIds.has(id)) id = `${id}_${usedEdgeIds.size}`;
-    usedEdgeIds.add(id);
-    const edge = {
-      id,
+  }
+  if (!nodeIds.length) throw new Error("pipeline_flow must include at least one agent");
+  const layout = layoutPositions(flow);
+  const nodes = nodeIds.map((id) => ({
+    id,
+    position: positions[id] || layout[id] || { x: 0, y: 0 },
+  }));
+  const edges = [];
+  (flow.children || []).forEach((stage, i) => {
+    const thenAct = stage.then || "proceed";
+    const target = stage.next_agent_id;
+    if (thenAct === "stop" || !target) return;
+    const source = stage.agent_id;
+    let when = { type: "always" };
+    let kind = "forward";
+    if (stage.action !== "proceed") {
+      let invert = stage.action === "if_not";
+      if (stage.result_op === "not_equal") invert = !invert;
+      when = { type: "on_status", status: stage.expected || "" };
+      if (invert) when.invert = true;
+      kind = "result_is";
+    }
+    edges.push({
+      id: `e_stage_${i}_${source}_${target}`,
       source,
       target,
-      direction: kind === "back" ? "back" : "forward",
+      direction: "forward",
       kind,
-      when: when || { type: "always" },
-      limit,
-    };
-    if (role) edge.role = role;
-    edges.push(edge);
-  }
-
-  function compileSeq(seq, incoming, depth) {
-    let exits = incoming;
-    for (const child of seq.children || []) {
-      if (child.type === "agent") {
-        addAgent(child.id, depth);
-        for (const item of exits) {
-          addEdge(item.source, child.id, item.when, item);
-        }
-        exits = [
-          {
-            source: child.id,
-            when: { type: "always" },
-            kind: "forward",
-            limit: child.forward_limit ?? DEFAULT_EDGE_LIMIT,
-          },
-        ];
-      } else if (child.type === "if") {
-        if (!exits.length) throw new Error("If / Else needs an agent before it");
-        const thenN = collectAgentIds(child.then, []).length;
-        const elseN = collectAgentIds(child.else, []).length;
-        if (!thenN && !elseN) continue;
-        const ifWhen = child.when || { type: "always" };
-        const ifLimit = child.limit ?? DEFAULT_EDGE_LIMIT;
-        const thenKind = ifWhen.type === "on_status" ? "result_is" : "if";
-        const thenIn = exits.map((item) => ({
-          source: item.source,
-          when: ifWhen,
-          role: "then",
-          kind: thenKind,
-          limit: ifLimit,
-          blockId: child.id,
-          id:
-            thenKind === "result_is"
-              ? `e_result_${child.id}_then`
-              : `e_if_${child.id}_then`,
-        }));
-        const elseIn = exits.map((item) => ({
-          source: item.source,
-          when: { type: "always" },
-          role: "else",
-          kind: "if",
-          limit: ifLimit,
-          blockId: child.id,
-          id: `e_if_${child.id}_else`,
-        }));
-        const thenExits = compileSeq(child.then || emptySequence(), thenIn, depth + 1);
-        const elseExits = elseN
-          ? compileSeq(child.else || emptySequence(), elseIn, depth + 1)
-          : [];
-        exits = [...thenExits, ...elseExits];
-      } else if (child.type === "loop") {
-        const first = firstAgentId(child.body);
-        if (!first) throw new Error("Loop needs at least one agent in its body");
-        const bodyExits = compileSeq(child.body || emptySequence(), exits, depth + 1);
-        const lasts = [];
-        for (const item of bodyExits) {
-          if (item.source && !lasts.includes(item.source)) lasts.push(item.source);
-        }
-        const loopLimit = child.limit ?? child.max_visits ?? DEFAULT_EDGE_LIMIT;
-        for (const last of lasts) {
-          addEdge(last, first, child.when || { type: "on_retry" }, {
-            role: "loop",
-            kind: "back",
-            limit: loopLimit,
-            blockId: child.id,
-            id: lasts.length === 1 ? `e_back_${child.id}` : `e_back_${child.id}_${last}`,
-          });
-        }
-        exits = bodyExits;
-      }
-    }
-    return exits;
-  }
-
-  compileSeq(flow, [], 0);
-  if (!nodes.length) throw new Error("pipeline_flow must include at least one agent");
+      when,
+      limit: DEFAULT_EDGE_LIMIT,
+    });
+  });
   return {
-    entry: firstAgentId(flow) || nodes[0].id,
+    entry: nodeIds[0],
     nodes: applyPositions(nodes, positions),
     edges,
   };
@@ -408,179 +283,39 @@ export function mergeGraphPositions(graph, positions) {
 export function edgeLabel(edge) {
   const kind = inferEdgeKind(edge.data ? { ...edge, ...edge.data } : edge);
   const when = edge.when || edge.data?.when || {};
-  const cap = edge.limit ?? edge.data?.limit ?? edge.max_visits ?? edge.data?.max_visits;
+  const cap = edge.limit ?? edge.data?.limit;
   const capSuffix = cap ? ` ×${cap}` : "";
-  if (kind === "if") {
-    const role = edge.role || edge.data?.role;
-    const branch = role === "else" ? "Else" : "IF";
-    return `${branch} · ${when.type || "when"}${capSuffix}`;
-  }
-  if (kind === "back") return `Back${capSuffix}`;
+  if (when.invert) return `IF NOT Result ${when.status || ""}${capSuffix}`;
   if (kind === "result_is") {
-    const status = when.status || "result";
-    return `Result is ${status}${capSuffix}`;
+    return `IF Result Equal ${when.status || ""}${capSuffix}`;
   }
-  return `Forward${capSuffix}`;
+  if (kind === "if") return `IF${capSuffix}`;
+  if (kind === "back") return `Back${capSuffix}`;
+  return `Go to${capSuffix}`;
 }
 
-/** React Flow nodes/edges for Graph view (control nodes are visual-only). */
 export function flowToDisplayGraph(flow, agentsById, positions = {}) {
-  const nodes = [];
-  const edges = [];
-  let absY = 40;
-  let e = 0;
-  const relFrames = [];
-
-  function nextPosition(id, depth, parentId) {
-    if (parentId) {
-      const frame = relFrames[relFrames.length - 1];
-      const p = { x: 20, y: frame.y };
-      frame.y += 100;
-      return p;
-    }
-    if (positions[id] && id.indexOf("if_") !== 0 && id.indexOf("loop_") !== 0) {
-      const p = positions[id];
-      absY = Math.max(absY, p.y + 110);
-      return p;
-    }
-    const p = { x: 80 + depth * 56, y: absY };
-    absY += 110;
-    return p;
+  let compiled;
+  try {
+    compiled = compileFlow(flow, positions);
+  } catch {
+    return { nodes: [], edges: [] };
   }
-
-  function link(source, target, role, when, extra, handles = {}) {
-    e += 1;
-    edges.push({
-      id: `rf_${source}_${target}_${e}`,
-      source,
-      target,
-      sourceHandle: handles.sourceHandle,
-      targetHandle: handles.targetHandle,
-      label: edgeLabel({ role, when, kind: extra.kind, limit: extra.limit, ...extra }),
-      data: { role, when, kind: extra.kind, limit: extra.limit, ...extra },
-    });
-  }
-
-  function walkSeq(seq, incoming, depth, parentId) {
-    let exits = incoming;
-    for (const child of seq.children || []) {
-      if (child.type === "agent") {
-        nodes.push({
-          id: child.id,
-          type: "agent",
-          position: nextPosition(child.id, depth, parentId),
-          parentId,
-          extent: parentId ? "parent" : undefined,
-          data: {
-            agentId: child.id,
-            label: agentsById[child.id]?.name || child.id,
-          },
-        });
-        for (const item of exits) {
-          link(item.source, child.id, item.role, item.when, item.extra || {}, {
-            sourceHandle: item.sourceHandle,
-          });
-        }
-        exits = [{ source: child.id, when: { type: "always" }, kind: "forward", extra: { limit: child.forward_limit } }];
-      } else if (child.type === "if") {
-        const thenN = collectAgentIds(child.then, []).length;
-        const elseN = collectAgentIds(child.else, []).length;
-        if (!thenN && !elseN) continue;
-        nodes.push({
-          id: child.id,
-          type: "branch",
-          position: nextPosition(child.id, depth, parentId),
-          parentId,
-          extent: parentId ? "parent" : undefined,
-          data: { when: child.when, label: "If" },
-        });
-        for (const item of exits) {
-          link(item.source, child.id, item.role, item.when, item.extra || {});
-        }
-        const thenFirst = firstAgentId(child.then);
-        const elseFirst = firstAgentId(child.else);
-        const thenExits = walkSeq(
-          child.then || emptySequence(),
-          thenFirst
-            ? [
-                {
-                  source: child.id,
-                  when: child.when,
-                  role: "then",
-                  kind: child.when?.type === "on_status" ? "result_is" : "if",
-                  extra: { limit: child.limit },
-                  sourceHandle: "then",
-                },
-              ]
-            : [],
-          depth + 1,
-          parentId,
-        );
-        const elseExits = walkSeq(
-          child.else || emptySequence(),
-          elseFirst
-            ? [
-                {
-                  source: child.id,
-                  when: { type: "always" },
-                  role: "else",
-                  kind: "if",
-                  extra: { limit: child.limit },
-                  sourceHandle: "else",
-                },
-              ]
-            : [],
-          depth + 1,
-          parentId,
-        );
-        exits = [...thenExits, ...elseExits];
-      } else if (child.type === "loop") {
-        const bodyIds = collectAgentIds(child.body, []);
-        const height = Math.max(160, bodyIds.length * 100 + 56);
-        const gx = 48 + depth * 24;
-        const gy = absY;
-        nodes.push({
-          id: child.id,
-          type: "loopGroup",
-          position: { x: gx, y: gy },
-          style: { width: 280, height },
-          data: {
-            when: child.when,
-            limit: child.limit ?? child.max_visits,
-            max_visits: child.limit ?? child.max_visits,
-            label: "Loop",
-          },
-        });
-        relFrames.push({ y: 48 });
-        absY = gy + 48;
-        const first = firstAgentId(child.body);
-        const bodyExits = walkSeq(
-          child.body || emptySequence(),
-          exits,
-          depth + 1,
-          child.id,
-        );
-        relFrames.pop();
-        const lasts = [];
-        for (const item of bodyExits) {
-          if (item.source && !lasts.includes(item.source)) lasts.push(item.source);
-        }
-        if (first) {
-          for (const last of lasts) {
-            link(last, first, "loop", child.when, {
-              kind: "back",
-              limit: child.limit ?? child.max_visits,
-              max_visits: child.limit ?? child.max_visits,
-            });
-          }
-        }
-        absY = gy + height + 24;
-        exits = bodyExits;
-      }
-    }
-    return exits;
-  }
-
-  walkSeq(flow, [], 0, undefined);
+  const nodes = compiled.nodes.map((n) => ({
+    id: n.id,
+    type: "agent",
+    position: n.position,
+    data: {
+      agentId: n.id,
+      label: agentCompanyLabel(agentsById[n.id]) || n.id,
+    },
+  }));
+  const edges = compiled.edges.map((e) => ({
+    id: e.id,
+    source: e.source,
+    target: e.target,
+    label: edgeLabel(e),
+    data: { ...e },
+  }));
   return { nodes, edges };
 }

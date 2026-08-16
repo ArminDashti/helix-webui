@@ -158,7 +158,7 @@ function exportResultPdf({
 }
 
 function normalizeMode(mode) {
-  if (mode === "analysis") return "analytical_report";
+  if (mode === "analysis" || mode === "research") return "analytical_report";
   if (mode === "both") return "analytical_report_chart";
   return mode || "auto";
 }

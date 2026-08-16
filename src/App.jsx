@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import Layout from "./components/Layout.jsx";
 import { ApiStatusProvider } from "./context/ApiStatusContext.jsx";
 import AboutMePage from "./pages/AboutMePage.jsx";
+import AdminPage from "./pages/AdminPage.jsx";
 import AgentsPage from "./pages/AgentsPage.jsx";
 import AnalysisPage from "./pages/AnalysisPage.jsx";
 import DbExplorerPage from "./pages/DbExplorerPage.jsx";
@@ -39,9 +40,9 @@ export default function App() {
             <Route path="docs" element={<DocsPage />} />
             <Route path="db-explorer" element={<DbExplorerPage />} />
             <Route path="settings" element={<SettingsPage />} />
+            <Route path="admin" element={<AdminPage />} />
             <Route path="about-me" element={<AboutMePage />} />
             <Route path="instructions" element={<Navigate to="/rules" replace />} />
-            <Route path="admin" element={<Navigate to="/settings" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

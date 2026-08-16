@@ -2,35 +2,37 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BarChart3, Play } from "lucide-react";
 import { fetchAgents, streamRun, createResult } from "../api/client.js";
+import ErrorModal from "../components/ErrorModal.jsx";
 import IconButton from "../components/IconButton.jsx";
 import PageHeader from "../components/PageHeader.jsx";
 import RunProgressModal from "../components/RunProgressModal.jsx";
+import { useApiStatus } from "../context/ApiStatusContext.jsx";
+import { agentCompanyLabel } from "../utils/agentLabel.js";
 import {
   parseColumns,
   textDirection,
   textLang,
 } from "../utils/textDirection.js";
+import { sortByLabel } from "../utils/sortOptions.js";
 
-const MODES = [
-  { value: "auto", label: "Auto" },
+const MODES = sortByLabel([
   { value: "chart", label: "Chart" },
-  { value: "analytical_report", label: "Analytical report" },
   { value: "grid", label: "Grid" },
-  { value: "analytical_report_chart", label: "Analytical report + Chart" },
-];
+  { value: "research", label: "Research" },
+]);
 
-const LANGUAGES = [
+const LANGUAGES = sortByLabel([
   { value: "en", label: "English" },
   { value: "fa", label: "Persian" },
+]);
+
+const RESEARCH_LEVELS = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
 ];
 
-const REPORT_TYPES = [
-  { value: "deep", label: "Deep" },
-  { value: "summary", label: "Summary" },
-  { value: "simple", label: "Simple" },
-];
-
-const CHART_TYPES = [
+const CHART_TYPES = sortByLabel([
   { value: "bar", label: "Bar" },
   { value: "line", label: "Line" },
   { value: "area", label: "Area" },
@@ -39,27 +41,45 @@ const CHART_TYPES = [
   { value: "scatter", label: "Scatter" },
   { value: "stacked_bar", label: "Stacked bar" },
   { value: "horizontal_bar", label: "Horizontal bar" },
-];
+]);
 
 const selectClass =
   "mt-1.5 w-full min-w-[8.5rem] rounded-xl border border-line bg-paper px-3 py-2.5 text-[15px] text-ink outline-none ring-moss/30 focus:border-moss focus:ring-2";
 
 function needsType(mode) {
-  return mode === "analytical_report" || mode === "analytical_report_chart";
+  return (
+    mode === "research" ||
+    mode === "analytical_report" ||
+    mode === "analytical_report_chart"
+  );
 }
 
 function needsChart(mode) {
   return mode === "chart" || mode === "analytical_report_chart";
 }
 
+function llmUnavailableMessage(health) {
+  if (!health) {
+    return "Cannot reach the API; LLM cannot be used.";
+  }
+  const provider = health.provider === "cursor" ? "cursor" : "openrouter";
+  const block = health[provider];
+  if (block?.status === "configured") return null;
+  if (provider === "cursor") {
+    return block?.detail || "Cursor API key is not set";
+  }
+  return block?.detail || "OpenRouter API key is not set";
+}
+
 export default function AnalysisPage() {
   const navigate = useNavigate();
+  const { health, checkConnection } = useApiStatus();
   const [prompt, setPrompt] = useState(
     "Show total sales by product category",
   );
-  const [mode, setMode] = useState("auto");
+  const [mode, setMode] = useState("chart");
   const [language, setLanguage] = useState("en");
-  const [reportType, setReportType] = useState("summary");
+  const [reportType, setReportType] = useState("medium");
   const [chartType, setChartType] = useState("bar");
   const [columnsRaw, setColumnsRaw] = useState(
     "Category/Product/OrderQty/LineTotal",
@@ -71,6 +91,7 @@ export default function AnalysisPage() {
   const [runError, setRunError] = useState(null);
   const [activePrompt, setActivePrompt] = useState("");
   const [nameById, setNameById] = useState({});
+  const [llmError, setLlmError] = useState(null);
   const abortRef = useRef(null);
 
   useEffect(() => {
@@ -87,7 +108,7 @@ export default function AnalysisPage() {
         if (cancelled) return;
         const map = {};
         for (const a of agents || []) {
-          if (a?.id) map[a.id] = a.name || a.id;
+          if (a?.id) map[a.id] = agentCompanyLabel(a);
         }
         setNameById(map);
       } catch {
@@ -106,7 +127,15 @@ export default function AnalysisPage() {
       setError("Enter a prompt first.");
       return;
     }
+    const latest = (await checkConnection({ silent: true })) || health;
+    const llmMessage = llmUnavailableMessage(latest);
+    if (llmMessage) {
+      setError(llmMessage);
+      setLlmError({ title: "Cannot run", message: llmMessage });
+      return;
+    }
     setError(null);
+    setLlmError(null);
     setRunError(null);
     setMessages([]);
     setActivePrompt(trimmed);
@@ -210,18 +239,18 @@ export default function AnalysisPage() {
           {needsType(mode) ? (
             <div>
               <label
-                htmlFor="report_type"
+                htmlFor="research_level"
                 className="block text-sm font-medium text-ink"
               >
-                Type
+                Research
               </label>
               <select
-                id="report_type"
+                id="research_level"
                 value={reportType}
                 onChange={(e) => setReportType(e.target.value)}
                 className={selectClass}
               >
-                {REPORT_TYPES.map((item) => (
+                {RESEARCH_LEVELS.map((item) => (
                   <option key={item.value} value={item.value}>
                     {item.label}
                   </option>
@@ -317,6 +346,8 @@ export default function AnalysisPage() {
           {error}
         </p>
       ) : null}
+
+      <ErrorModal error={llmError} onDismiss={() => setLlmError(null)} />
 
       <RunProgressModal
         open={modalOpen}

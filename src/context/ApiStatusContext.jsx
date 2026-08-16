@@ -4,12 +4,14 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { fetchHealth, subscribeApiErrors } from "../api/client.js";
 import ErrorModal from "../components/ErrorModal.jsx";
 
 const ApiStatusContext = createContext(null);
+const STATUS_LOG_CAP = 50;
 
 function summarizeHealth(health) {
   if (!health) return "disconnected";
@@ -27,11 +29,74 @@ function summarizeHealth(health) {
   return "disconnected";
 }
 
+function fetchErrorDetail(err) {
+  if (!err) return "Cannot reach the API";
+  const parts = [err.message, err.detail].filter(Boolean);
+  return [...new Set(parts)].join(" — ") || "Cannot reach the API";
+}
+
+function snapshotServices(health, fetchError) {
+  if (!health) {
+    const detail = fetchErrorDetail(fetchError);
+    return {
+      engine: { status: "disconnected", detail },
+      database: {
+        status: "disconnected",
+        detail: "Engine unreachable; database status unknown",
+      },
+      llm: {
+        status: "disconnected",
+        detail: "Engine unreachable; LLM status unknown",
+      },
+    };
+  }
+  const providerKey = health.provider === "cursor" ? "cursor" : "openrouter";
+  return {
+    engine: {
+      status: health.api?.status || "disconnected",
+      detail: health.api?.detail || "",
+    },
+    database: {
+      status: health.database?.status || "disconnected",
+      detail: health.database?.detail || "",
+    },
+    llm: {
+      status: health[providerKey]?.status || "disconnected",
+      detail: health[providerKey]?.detail || "",
+    },
+  };
+}
+
+function appendStatusEvents(prevLog, prevSnap, nextSnap, at) {
+  const next = [...prevLog];
+  for (const service of ["llm", "engine", "database"]) {
+    const before = prevSnap?.[service];
+    const after = nextSnap[service];
+    if (!after) continue;
+    if (
+      !before ||
+      before.status !== after.status ||
+      before.detail !== after.detail
+    ) {
+      next.push({
+        at,
+        service,
+        status: after.status,
+        detail: after.detail || "",
+      });
+    }
+  }
+  return next.slice(-STATUS_LOG_CAP);
+}
+
 export function ApiStatusProvider({ children }) {
   const [apiError, setApiError] = useState(null);
   const [health, setHealth] = useState(null);
   const [summary, setSummary] = useState("unknown");
   const [checking, setChecking] = useState(false);
+  const [lastFetchError, setLastFetchError] = useState(null);
+  const [statusLog, setStatusLog] = useState([]);
+  const prevSnapRef = useRef(null);
 
   useEffect(() => subscribeApiErrors((err) => setApiError(err)), []);
 
@@ -40,11 +105,25 @@ export function ApiStatusProvider({ children }) {
     try {
       const data = await fetchHealth({ silent });
       setHealth(data);
+      setLastFetchError(null);
       setSummary(summarizeHealth(data));
+      const snap = snapshotServices(data, null);
+      const at = data?.api?.checked_at || new Date().toISOString();
+      setStatusLog((prev) =>
+        appendStatusEvents(prev, prevSnapRef.current, snap, at),
+      );
+      prevSnapRef.current = snap;
       return data;
-    } catch {
+    } catch (err) {
       setHealth(null);
+      setLastFetchError(err);
       setSummary("disconnected");
+      const snap = snapshotServices(null, err);
+      const at = new Date().toISOString();
+      setStatusLog((prev) =>
+        appendStatusEvents(prev, prevSnapRef.current, snap, at),
+      );
+      prevSnapRef.current = snap;
       return null;
     } finally {
       setChecking(false);
@@ -72,10 +151,20 @@ export function ApiStatusProvider({ children }) {
       summary,
       checking,
       checkConnection,
+      lastFetchError,
+      statusLog,
       apiError,
       clearApiError: () => setApiError(null),
     }),
-    [health, summary, checking, checkConnection, apiError],
+    [
+      health,
+      summary,
+      checking,
+      checkConnection,
+      lastFetchError,
+      statusLog,
+      apiError,
+    ],
   );
 
   return (

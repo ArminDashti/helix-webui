@@ -1,11 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Bot, Save } from "lucide-react";
-import {
-  fetchAgents,
-  renameAgent,
-  updateAgentInstruction,
-} from "../api/client.js";
+import { fetchAgents, updateAgent } from "../api/client.js";
 import IconButton from "../components/IconButton.jsx";
 import PageHeader from "../components/PageHeader.jsx";
 
@@ -17,7 +13,8 @@ export default function EditAgentPage() {
   const navigate = useNavigate();
   const [agent, setAgent] = useState(null);
   const [name, setName] = useState("");
-  const [instruction, setInstruction] = useState("");
+  const [humanName, setHumanName] = useState("");
+  const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -26,16 +23,17 @@ export default function EditAgentPage() {
     let cancelled = false;
     (async () => {
       try {
-        const list = (await fetchAgents()) || [];
+        const list = await fetchAgents();
         if (cancelled) return;
-        const found = list.find((a) => a.id === agentId);
+        const found = (list || []).find((a) => a.id === agentId);
         if (!found) {
           setError("Agent not found");
           return;
         }
         setAgent(found);
         setName(found.name || found.id);
-        setInstruction(found.instruction || "");
+        setHumanName(found.human_name || "");
+        setDescription(found.description || "");
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Failed to load");
@@ -55,8 +53,11 @@ export default function EditAgentPage() {
     setSaving(true);
     setError(null);
     try {
-      await renameAgent(agent.id, name);
-      await updateAgentInstruction(agent.id, instruction);
+      await updateAgent(agent.id, {
+        name,
+        human_name: humanName,
+        description,
+      });
       navigate("/agents");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
@@ -86,7 +87,16 @@ export default function EditAgentPage() {
           <input value={agent?.id || agentId} className={inputClass} disabled />
         </label>
         <label className="block text-sm">
-          <span className="font-medium text-ink">Name</span>
+          <span className="font-medium text-ink">Human name</span>
+          <input
+            value={humanName}
+            onChange={(e) => setHumanName(e.target.value)}
+            className={inputClass}
+            required
+          />
+        </label>
+        <label className="block text-sm">
+          <span className="font-medium text-ink">Role</span>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -94,15 +104,17 @@ export default function EditAgentPage() {
             required
           />
         </label>
-        <label className="flex min-h-0 flex-1 flex-col text-sm">
-          <span className="font-medium text-ink">Instruction</span>
-          <textarea
-            value={instruction}
-            onChange={(e) => setInstruction(e.target.value)}
-            className="mt-1 min-h-[12rem] w-full flex-1 resize-y rounded-xl border border-line bg-fog/40 px-3 py-2 font-mono text-[13px] outline-none focus:border-moss focus:ring-2 focus:ring-moss/30"
-            spellCheck={false}
+        <label className="block text-sm">
+          <span className="font-medium text-ink">Description</span>
+          <input
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            className={inputClass}
           />
         </label>
+        <p className="text-sm text-muted">
+          Agents use assigned rules and skills only.
+        </p>
         <div className="flex flex-wrap gap-2">
           <IconButton
             type="submit"

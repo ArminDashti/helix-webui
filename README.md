@@ -22,10 +22,10 @@ Optional: copy `.env.example` to `.env` and set `VITE_API_BASE_URL` for an absol
 | Route | Purpose |
 |-------|---------|
 | `/` | Analysis — prompt + mode, Run |
-| `/run` | Live SSE flowchart of the agent pipeline + results (PDF export) |
-| `/instructions` | Per-agent instructions + reference `.md` files (Source/Preview) |
+| `/results` | Analysis result history (show, export, delete) |
 | `/rules` | Rules list and editor |
 | `/skills` | Skills list and editor |
+| `/agents` | Agent list, Arrange stages (one IF per stage), Graph |
 | `/docs` | Table column docs (sql-description and description) |
 | `/results` | Analysis result history (show, export, delete) |
 | `/settings` | SQL Server + LLM provider, API keys, and models |

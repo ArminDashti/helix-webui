@@ -8,9 +8,8 @@ import PageHeader from "../components/PageHeader.jsx";
 const PIPELINE_DESIGNER_HINT = {
   id: "pipeline_designer",
   name: "Pipeline Designer",
+  human_name: "Maya",
   description: "Designs and documents analysis pipelines",
-  instruction:
-    "You design Helix analysis pipelines. Propose agent stages, responsibilities, handoffs, and validation rules. Prefer clear markdown plans over code unless asked.",
 };
 
 const inputClass =
@@ -22,18 +21,16 @@ export default function NewAgentPage() {
   const [error, setError] = useState(null);
   const [newId, setNewId] = useState(PIPELINE_DESIGNER_HINT.id);
   const [newName, setNewName] = useState(PIPELINE_DESIGNER_HINT.name);
+  const [newHumanName, setNewHumanName] = useState(PIPELINE_DESIGNER_HINT.human_name);
   const [newDescription, setNewDescription] = useState(
     PIPELINE_DESIGNER_HINT.description,
-  );
-  const [newInstruction, setNewInstruction] = useState(
-    PIPELINE_DESIGNER_HINT.instruction,
   );
 
   function fillPipelineDesigner() {
     setNewId(PIPELINE_DESIGNER_HINT.id);
     setNewName(PIPELINE_DESIGNER_HINT.name);
+    setNewHumanName(PIPELINE_DESIGNER_HINT.human_name);
     setNewDescription(PIPELINE_DESIGNER_HINT.description);
-    setNewInstruction(PIPELINE_DESIGNER_HINT.instruction);
   }
 
   async function handleCreateAgent(event) {
@@ -44,8 +41,8 @@ export default function NewAgentPage() {
       await createAgent({
         id: newId.trim(),
         name: newName.trim(),
+        human_name: newHumanName.trim(),
         description: newDescription.trim(),
-        instruction: newInstruction,
       });
       navigate("/agents");
     } catch (err) {
@@ -89,7 +86,17 @@ export default function NewAgentPage() {
             />
           </label>
           <label className="block text-sm">
-            <span className="font-medium text-ink">Name</span>
+            <span className="font-medium text-ink">Human name</span>
+            <input
+              value={newHumanName}
+              onChange={(e) => setNewHumanName(e.target.value)}
+              className={inputClass}
+              placeholder="Maya"
+              required
+            />
+          </label>
+          <label className="block text-sm">
+            <span className="font-medium text-ink">Role</span>
             <input
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
@@ -107,15 +114,9 @@ export default function NewAgentPage() {
             className={inputClass}
           />
         </label>
-        <label className="flex min-h-0 flex-1 flex-col text-sm">
-          <span className="font-medium text-ink">Instruction</span>
-          <textarea
-            value={newInstruction}
-            onChange={(e) => setNewInstruction(e.target.value)}
-            className="mt-1 min-h-[12rem] w-full flex-1 resize-y rounded-xl border border-line bg-fog/40 px-3 py-2 font-mono text-[13px] outline-none focus:border-moss focus:ring-2 focus:ring-moss/30"
-            spellCheck={false}
-          />
-        </label>
+        <p className="text-sm text-muted">
+          Agents use assigned rules and skills only.
+        </p>
         <div className="flex flex-wrap gap-2">
           <IconButton
             type="submit"

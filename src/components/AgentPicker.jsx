@@ -1,3 +1,5 @@
+import { agentCompanyLabel } from "../utils/agentLabel.js";
+
 export default function AgentPicker({ agents, selectedIds, onChange }) {
   function setEnabled(id, enabled) {
     if (enabled) {
@@ -30,8 +32,8 @@ export default function AgentPicker({ agents, selectedIds, onChange }) {
                 ].join(" ")}
               >
                 <div className="min-w-0">
-                  <p className="truncate font-medium text-ink">
-                    {agent.name || agent.id}
+                  <p className="truncate font-medium text-ink" title={agent.id}>
+                    {agentCompanyLabel(agent)}
                   </p>
                   <p className="truncate font-mono text-[11px] text-muted">
                     {agent.id}
