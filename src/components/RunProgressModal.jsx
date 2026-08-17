@@ -1,21 +1,19 @@
 import { useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import IconButton from "./IconButton.jsx";
+import { useI18n } from "../context/I18nContext.jsx";
+import { translateKnownMessage } from "../i18n/apiErrors.js";
 
-const FALLBACK_NAMES = {
-  user: "Prompt",
-  system: "System",
-};
-
-function agentLabel(agentId, nameById) {
+function agentLabel(agentId, nameById, t) {
   if (nameById?.[agentId]) return nameById[agentId];
-  if (FALLBACK_NAMES[agentId]) return FALLBACK_NAMES[agentId];
-  if (!agentId) return "Agent";
+  if (agentId === "user") return t("runProgress.fallbackUser");
+  if (agentId === "system") return t("runProgress.fallbackSystem");
+  if (!agentId) return t("runProgress.fallbackAgent");
   return agentId.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 /**
- * Full-screen progress modal for a live pipeline run (English log only).
+ * Full-screen progress modal for a live pipeline run.
  */
 export default function RunProgressModal({
   open,
@@ -27,6 +25,7 @@ export default function RunProgressModal({
   nameById = {},
 }) {
   const listRef = useRef(null);
+  const { t } = useI18n();
 
   useEffect(() => {
     if (!open || !listRef.current) return;
@@ -45,7 +44,7 @@ export default function RunProgressModal({
       <div className="flex max-h-[min(90dvh,40rem)] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-line bg-paper shadow-[0_24px_60px_-20px_rgba(0,0,0,0.7)]">
         <header className="shrink-0 border-b border-line/80 px-4 py-3">
           <h2 id="run-progress-title" className="font-display text-lg text-ink">
-            Running analysis
+            {t("runProgress.title")}
           </h2>
           {prompt ? (
             <p className="mt-1 line-clamp-2 text-sm text-muted">{prompt}</p>
@@ -57,7 +56,7 @@ export default function RunProgressModal({
           className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-3 text-sm"
         >
           {messages.length === 0 && running ? (
-            <li className="text-muted">Connecting to pipeline…</li>
+            <li className="text-muted">{t("runProgress.connecting")}</li>
           ) : null}
           {messages.map((m, i) => (
             <li
@@ -65,9 +64,11 @@ export default function RunProgressModal({
               className="rounded-lg border border-line/60 bg-fog/60 px-3 py-2 animate-[fadeIn_0.4s_ease]"
             >
               <span className="font-medium text-moss">
-                {agentLabel(m.agent_id, nameById)}
+                {agentLabel(m.agent_id, nameById, t)}
               </span>
-              <p className="mt-0.5 text-ink/90">{m.message}</p>
+              <p className="mt-0.5 text-ink/90">
+                {translateKnownMessage(t, m.message)}
+              </p>
             </li>
           ))}
         </ul>
@@ -75,11 +76,11 @@ export default function RunProgressModal({
         <footer className="flex shrink-0 items-center justify-between gap-2 border-t border-line/80 px-4 py-3">
           {running ? (
             <p className="text-xs font-medium text-moss animate-pulse">
-              Agents working…
+              {t("runProgress.working")}
             </p>
           ) : error ? (
             <p className="text-sm text-warn" role="status">
-              {error}
+              {translateKnownMessage(t, error)}
             </p>
           ) : (
             <span />
@@ -91,7 +92,7 @@ export default function RunProgressModal({
               onClick={onDismiss}
               className="rounded-xl border border-line bg-fog px-4 py-2 text-sm font-medium text-ink hover:bg-fog/80"
             >
-              Close
+              {t("common.close")}
             </IconButton>
           ) : null}
         </footer>

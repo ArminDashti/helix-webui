@@ -1,8 +1,10 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import Layout from "./components/Layout.jsx";
 import { ApiStatusProvider } from "./context/ApiStatusContext.jsx";
+import { I18nProvider } from "./context/I18nContext.jsx";
 import AboutMePage from "./pages/AboutMePage.jsx";
 import AdminPage from "./pages/AdminPage.jsx";
+import AgentAssignmentsPage from "./pages/AgentAssignmentsPage.jsx";
 import AgentsPage from "./pages/AgentsPage.jsx";
 import AnalysisPage from "./pages/AnalysisPage.jsx";
 import DbExplorerPage from "./pages/DbExplorerPage.jsx";
@@ -21,6 +23,7 @@ import SkillsPage from "./pages/SkillsPage.jsx";
 export default function App() {
   return (
     <BrowserRouter>
+      <I18nProvider>
       <ApiStatusProvider>
         <Routes>
           <Route element={<Layout />}>
@@ -36,6 +39,7 @@ export default function App() {
             <Route path="skills/:scope/:skillId" element={<EditSkillPage />} />
             <Route path="agents" element={<AgentsPage />} />
             <Route path="agents/new" element={<NewAgentPage />} />
+            <Route path="agents/:agentId/assignments" element={<AgentAssignmentsPage />} />
             <Route path="agents/:agentId" element={<EditAgentPage />} />
             <Route path="docs" element={<DocsPage />} />
             <Route path="db-explorer" element={<DbExplorerPage />} />
@@ -47,6 +51,7 @@ export default function App() {
           </Route>
         </Routes>
       </ApiStatusProvider>
+      </I18nProvider>
     </BrowserRouter>
   );
 }

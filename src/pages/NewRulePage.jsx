@@ -4,15 +4,19 @@ import { Plus, Scale } from "lucide-react";
 import { createRule } from "../api/client.js";
 import IconButton from "../components/IconButton.jsx";
 import PageHeader from "../components/PageHeader.jsx";
+import { useI18n } from "../context/I18nContext.jsx";
+import { failMessage } from "../i18n/apiErrors.js";
 
 const inputClass =
   "mt-1 w-full rounded-xl border border-line bg-fog/40 px-3 py-2 text-sm outline-none focus:border-moss focus:ring-2 focus:ring-moss/30";
 
 export default function NewRulePage() {
   const navigate = useNavigate();
+  const { t } = useI18n();
+  const defaultContent = `${t("rules.defaultContent")}\n\n`;
   const [newId, setNewId] = useState("");
   const [name, setName] = useState("");
-  const [content, setContent] = useState("# New rule\n\n");
+  const [content, setContent] = useState(defaultContent);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
@@ -20,24 +24,24 @@ export default function NewRulePage() {
     event.preventDefault();
     const id = newId.trim();
     if (!id) {
-      setError("Enter a rule id.");
+      setError(t("rules.idRequired"));
       return;
     }
     if (!name.trim()) {
-      setError("Enter a rule name.");
+      setError(t("rules.nameRequired"));
       return;
     }
     setSaving(true);
     setError(null);
     try {
       await createRule(id, {
-        content: content || "# New rule\n\n",
+        content: content || defaultContent,
         agents: [],
         name: name.trim(),
       });
       navigate("/rules");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Create failed");
+      setError(failMessage(err, t, "common.createFailed"));
     } finally {
       setSaving(false);
     }
@@ -45,7 +49,7 @@ export default function NewRulePage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
-      <PageHeader icon={Scale} title="New rule" backTo="/rules" />
+      <PageHeader icon={Scale} title={t("rules.newTitle")} backTo="/rules" />
       {error ? (
         <p className="rounded-xl border border-warn-border bg-warn-bg px-4 py-2 text-sm text-warn">
           {error}
@@ -57,28 +61,28 @@ export default function NewRulePage() {
       >
         <div className="grid gap-3 md:grid-cols-2">
           <label className="block text-sm">
-            <span className="font-medium text-ink">Id</span>
+            <span className="font-medium text-ink">{t("common.id")}</span>
             <input
               value={newId}
               onChange={(e) => setNewId(e.target.value)}
               className={inputClass}
-              placeholder="my-custom-rule"
+              placeholder={t("rules.idPlaceholder")}
               required
             />
           </label>
           <label className="block text-sm">
-            <span className="font-medium text-ink">Name</span>
+            <span className="font-medium text-ink">{t("common.name")}</span>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
               className={inputClass}
-              placeholder="My rule"
+              placeholder={t("rules.namePlaceholder")}
               required
             />
           </label>
         </div>
         <label className="flex min-h-0 flex-1 flex-col text-sm">
-          <span className="font-medium text-ink">Content</span>
+          <span className="font-medium text-ink">{t("rules.content")}</span>
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
@@ -93,7 +97,7 @@ export default function NewRulePage() {
             disabled={saving}
             className="rounded-xl bg-moss px-5 py-2.5 text-sm font-semibold text-white hover:bg-moss-deep disabled:opacity-50"
           >
-            {saving ? "Creating…" : "Create rule"}
+            {saving ? t("common.creating") : t("rules.create")}
           </IconButton>
         </div>
       </form>

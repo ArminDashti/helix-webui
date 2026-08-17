@@ -4,6 +4,8 @@ import { Save, Sparkles } from "lucide-react";
 import { fetchSkills, renameSkill, updateSkill } from "../api/client.js";
 import IconButton from "../components/IconButton.jsx";
 import PageHeader from "../components/PageHeader.jsx";
+import { useI18n } from "../context/I18nContext.jsx";
+import { failMessage } from "../i18n/apiErrors.js";
 
 const inputClass =
   "mt-1 w-full rounded-xl border border-line bg-fog/40 px-3 py-2 text-sm outline-none focus:border-moss focus:ring-2 focus:ring-moss/30";
@@ -11,6 +13,7 @@ const inputClass =
 export default function EditSkillPage() {
   const { scope, skillId } = useParams();
   const navigate = useNavigate();
+  const { t } = useI18n();
   const [skill, setSkill] = useState(null);
   const [name, setName] = useState("");
   const [idDraft, setIdDraft] = useState("");
@@ -29,7 +32,7 @@ export default function EditSkillPage() {
           (s) => s.scope === scope && s.id === skillId,
         );
         if (!found) {
-          setError("Skill not found");
+          setError(t("skills.notFound"));
           return;
         }
         setSkill(found);
@@ -38,7 +41,7 @@ export default function EditSkillPage() {
         setContent(found.content || "");
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load");
+          setError(failMessage(err, t, "common.failedToLoad"));
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -47,7 +50,7 @@ export default function EditSkillPage() {
     return () => {
       cancelled = true;
     };
-  }, [scope, skillId]);
+  }, [scope, skillId, t]);
 
   async function handleSave(event) {
     event.preventDefault();
@@ -62,24 +65,23 @@ export default function EditSkillPage() {
       }
       await updateSkill(skill.scope, currentId, {
         content,
-        agents: [],
         name,
       });
       navigate("/skills");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Save failed");
+      setError(failMessage(err, t, "common.saveFailed"));
     } finally {
       setSaving(false);
     }
   }
 
   if (loading) {
-    return <p className="text-sm text-muted">Loading…</p>;
+    return <p className="text-sm text-muted">{t("common.loading")}</p>;
   }
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
-      <PageHeader icon={Sparkles} title="Edit skill" backTo="/skills" />
+      <PageHeader icon={Sparkles} title={t("skills.editTitle")} backTo="/skills" />
       {error ? (
         <p className="rounded-xl border border-warn-border bg-warn-bg px-4 py-2 text-sm text-warn">
           {error}
@@ -91,7 +93,7 @@ export default function EditSkillPage() {
       >
         <div className="grid gap-3 md:grid-cols-2">
           <label className="block text-sm">
-            <span className="font-medium text-ink">Id</span>
+            <span className="font-medium text-ink">{t("common.id")}</span>
             <input
               value={idDraft}
               onChange={(e) => setIdDraft(e.target.value)}
@@ -100,7 +102,7 @@ export default function EditSkillPage() {
             />
           </label>
           <label className="block text-sm">
-            <span className="font-medium text-ink">Name</span>
+            <span className="font-medium text-ink">{t("common.name")}</span>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -110,7 +112,7 @@ export default function EditSkillPage() {
           </label>
         </div>
         <label className="flex min-h-0 flex-1 flex-col text-sm">
-          <span className="font-medium text-ink">Content</span>
+          <span className="font-medium text-ink">{t("skills.content")}</span>
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
@@ -125,7 +127,7 @@ export default function EditSkillPage() {
             disabled={saving}
             className="rounded-xl bg-moss px-5 py-2.5 text-sm font-semibold text-white hover:bg-moss-deep disabled:opacity-50"
           >
-            {saving ? "Saving…" : "Save skill"}
+            {saving ? t("common.saving") : t("skills.save")}
           </IconButton>
         </div>
       </form>

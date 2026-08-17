@@ -157,40 +157,81 @@ export function insertAfterAgent(flow, agentId, block) {
   return insertStage(flow, idx < 0 ? (flow.children || []).length : idx + 1, stage);
 }
 
-export function validateFlow(flow) {
+export function validateFlow(flow, t) {
   const errors = [];
   if (!flow || flow.type !== "stages") {
-    errors.push("Arrange uses one IF per stage.");
+    errors.push(
+      t ? t("pipeline.validate.arrangeIf") : "Arrange uses one IF per stage.",
+    );
     return errors;
   }
   const children = flow.children || [];
-  if (!children.length) errors.push("Add at least one stage.");
+  if (!children.length) {
+    errors.push(t ? t("pipeline.validate.addStage") : "Add at least one stage.");
+  }
   children.forEach((stage, index) => {
+    const n = index + 1;
     if (stage.type !== "stage") {
-      errors.push(`Stage ${index + 1} is invalid.`);
+      errors.push(
+        t
+          ? t("pipeline.validate.stageInvalid", { n })
+          : `Stage ${n} is invalid.`,
+      );
       return;
     }
-    if (!stage.agent_id) errors.push(`Stage ${index + 1} needs an agent.`);
+    if (!stage.agent_id) {
+      errors.push(
+        t
+          ? t("pipeline.validate.stageNeedsAgent", { n })
+          : `Stage ${n} needs an agent.`,
+      );
+    }
     if (!["if", "if_not", "proceed"].includes(stage.action)) {
-      errors.push(`Stage ${index + 1} action must be IF, IF NOT, or Go to.`);
+      errors.push(
+        t
+          ? t("pipeline.validate.stageAction", { n })
+          : `Stage ${n} action must be IF, IF NOT, or Go to.`,
+      );
     }
     if (stage.action === "if" && children.filter((s) => s.action === "if").length) {
       /* counted below */
     }
     if (stage.action === "proceed") {
       if (stage.then !== "stop" && !stage.next_agent_id) {
-        errors.push(`Stage ${index + 1} Go to needs a next agent.`);
+        errors.push(
+          t
+            ? t("pipeline.validate.goToNeedsAgent", { n })
+            : `Stage ${n} Go to needs a next agent.`,
+        );
       }
     } else {
-      if (!stage.expected) errors.push(`Stage ${index + 1} needs a result value.`);
+      if (!stage.expected) {
+        errors.push(
+          t
+            ? t("pipeline.validate.needsResult", { n })
+            : `Stage ${n} needs a result value.`,
+        );
+      }
       if (!["equal", "not_equal"].includes(stage.result_op || "equal")) {
-        errors.push(`Stage ${index + 1} Results must be Equal or Not Equal.`);
+        errors.push(
+          t
+            ? t("pipeline.validate.resultOp", { n })
+            : `Stage ${n} Results must be Equal or Not Equal.`,
+        );
       }
       if (!["proceed", "stop"].includes(stage.then || "proceed")) {
-        errors.push(`Stage ${index + 1} THEN must be Go to or STOP.`);
+        errors.push(
+          t
+            ? t("pipeline.validate.then", { n })
+            : `Stage ${n} THEN must be Go to or STOP.`,
+        );
       }
       if ((stage.then || "proceed") === "proceed" && !stage.next_agent_id) {
-        errors.push(`Stage ${index + 1} THEN Go to needs a next agent.`);
+        errors.push(
+          t
+            ? t("pipeline.validate.thenGoTo", { n })
+            : `Stage ${n} THEN Go to needs a next agent.`,
+        );
       }
     }
   });
@@ -280,11 +321,28 @@ export function mergeGraphPositions(graph, positions) {
   return next;
 }
 
-export function edgeLabel(edge) {
+export function edgeLabel(edge, t) {
   const kind = inferEdgeKind(edge.data ? { ...edge, ...edge.data } : edge);
   const when = edge.when || edge.data?.when || {};
   const cap = edge.limit ?? edge.data?.limit;
   const capSuffix = cap ? ` ×${cap}` : "";
+  if (t) {
+    if (when.invert) {
+      return t("pipeline.edge.ifNotResult", {
+        status: when.status || "",
+        cap: capSuffix,
+      });
+    }
+    if (kind === "result_is") {
+      return t("pipeline.edge.ifResultEqual", {
+        status: when.status || "",
+        cap: capSuffix,
+      });
+    }
+    if (kind === "if") return t("pipeline.edge.if", { cap: capSuffix });
+    if (kind === "back") return t("pipeline.edge.back", { cap: capSuffix });
+    return t("pipeline.edge.goTo", { cap: capSuffix });
+  }
   if (when.invert) return `IF NOT Result ${when.status || ""}${capSuffix}`;
   if (kind === "result_is") {
     return `IF Result Equal ${when.status || ""}${capSuffix}`;
@@ -294,7 +352,7 @@ export function edgeLabel(edge) {
   return `Go to${capSuffix}`;
 }
 
-export function flowToDisplayGraph(flow, agentsById, positions = {}) {
+export function flowToDisplayGraph(flow, agentsById, positions = {}, t) {
   let compiled;
   try {
     compiled = compileFlow(flow, positions);
@@ -314,7 +372,7 @@ export function flowToDisplayGraph(flow, agentsById, positions = {}) {
     id: e.id,
     source: e.source,
     target: e.target,
-    label: edgeLabel(e),
+    label: edgeLabel(e, t),
     data: { ...e },
   }));
   return { nodes, edges };

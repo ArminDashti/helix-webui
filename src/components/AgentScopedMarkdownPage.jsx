@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Code2, Eye, Pencil, Save, Trash2 } from "lucide-react";
+import { useI18n } from "../context/I18nContext.jsx";
 import { renderMarkdownToHtml } from "../lib/markdownPreview.js";
 import { agentCompanyLabel } from "../utils/agentLabel.js";
 import FlashMessage from "./FlashMessage.jsx";
@@ -21,8 +22,8 @@ export default function AgentScopedMarkdownPage({
   onSelectItem,
   itemLabel = (item) => item.id,
   getItemId = (item) => item.id,
-  itemsTitle = "Items",
-  emptyItemsLabel = "None",
+  itemsTitle,
+  emptyItemsLabel,
   editorTitle,
   draft,
   onDraftChange,
@@ -35,15 +36,23 @@ export default function AgentScopedMarkdownPage({
   newId,
   onNewIdChange,
   onCreate,
-  createPlaceholder = "new-id",
-  createLabel = "Create",
+  createPlaceholder,
+  createLabel,
   createInputId = "scoped-new-id",
   createInputLabel = "",
   status,
   error,
   loading,
-  loadingLabel = "Loading…",
+  loadingLabel,
 }) {
+  const { t } = useI18n();
+  const resolvedItemsTitle = itemsTitle ?? t("markdown.items");
+  const resolvedEmptyItemsLabel = emptyItemsLabel ?? t("markdown.empty");
+  const resolvedLoadingLabel = loadingLabel ?? t("markdown.loading");
+  const resolvedCreatePlaceholder = createPlaceholder ?? t("markdown.createPlaceholder");
+  const resolvedCreateLabel = createLabel ?? t("markdown.create");
+  const resolvedSelectItem = t("markdown.selectItem");
+
   const [viewMode, setViewMode] = useState("source");
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
@@ -54,7 +63,7 @@ export default function AgentScopedMarkdownPage({
   }, [selectedId, selectedScope]);
 
   if (loading) {
-    return <p className="text-sm text-muted">{loadingLabel}</p>;
+    return <p className="text-sm text-muted">{resolvedLoadingLabel}</p>;
   }
 
   async function commitTitleRename() {
@@ -102,8 +111,8 @@ export default function AgentScopedMarkdownPage({
               id={createInputId}
               value={newId}
               onChange={(e) => onNewIdChange(e.target.value)}
-              placeholder={createPlaceholder}
-              aria-label={createInputLabel || createPlaceholder || "Id"}
+              placeholder={resolvedCreatePlaceholder}
+              aria-label={createInputLabel || resolvedCreatePlaceholder || t("common.id")}
               className={[
                 "w-full rounded-xl border border-line bg-fog/40 px-3 py-2 text-sm outline-none focus:border-moss focus:ring-2 focus:ring-moss/30",
                 createInputLabel ? "mt-1" : "",
@@ -114,7 +123,7 @@ export default function AgentScopedMarkdownPage({
             type="submit"
             className="rounded-xl border border-line bg-fog px-4 py-2 text-sm font-medium hover:bg-fog/80"
           >
-            {createLabel}
+            {resolvedCreateLabel}
           </button>
         </form>
       ) : null}
@@ -122,7 +131,7 @@ export default function AgentScopedMarkdownPage({
       <div className="grid min-h-0 flex-1 gap-2 lg:grid-cols-[200px_200px_1fr]">
         <aside className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-line/80 bg-paper/80 p-2">
           <p className="shrink-0 px-2 text-xs font-semibold uppercase tracking-wide text-muted">
-            Agents
+            {t("markdown.agents")}
           </p>
           <ul className="mt-1 min-h-0 flex-1 space-y-0.5 overflow-y-auto">
             {agents.map((agent) => (
@@ -131,7 +140,7 @@ export default function AgentScopedMarkdownPage({
                   type="button"
                   onClick={() => onSelectScope(agent.id)}
                   className={[
-                    "w-full rounded-xl px-3 py-1.5 text-left text-sm transition",
+                    "w-full rounded-xl px-3 py-1.5 text-start text-sm transition",
                     selectedScope === agent.id
                       ? "bg-moss text-white"
                       : "hover:bg-fog text-ink",
@@ -147,24 +156,24 @@ export default function AgentScopedMarkdownPage({
               type="button"
               onClick={() => onSelectScope("shared")}
               className={[
-                "w-full rounded-xl px-3 py-1.5 text-left text-sm transition",
+                "w-full rounded-xl px-3 py-1.5 text-start text-sm transition",
                 selectedScope === "shared"
                   ? "bg-moss text-white"
                   : "hover:bg-fog text-ink",
               ].join(" ")}
             >
-              Shared
+              {t("markdown.shared")}
             </button>
           </div>
         </aside>
 
         <aside className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-line/80 bg-paper/80 p-2">
           <p className="shrink-0 px-2 text-xs font-semibold uppercase tracking-wide text-muted">
-            {itemsTitle}
+            {resolvedItemsTitle}
           </p>
           <ul className="mt-1 min-h-0 flex-1 space-y-0.5 overflow-y-auto">
             {items.length === 0 ? (
-              <li className="px-2 py-2 text-sm text-muted">{emptyItemsLabel}</li>
+              <li className="px-2 py-2 text-sm text-muted">{resolvedEmptyItemsLabel}</li>
             ) : (
               items.map((item) => {
                 const id = getItemId(item);
@@ -174,7 +183,7 @@ export default function AgentScopedMarkdownPage({
                       type="button"
                       onClick={() => onSelectItem(id)}
                       className={[
-                        "w-full rounded-xl px-3 py-1.5 text-left text-sm transition",
+                        "w-full rounded-xl px-3 py-1.5 text-start text-sm transition",
                         selectedId === id
                           ? "bg-moss text-white"
                           : "hover:bg-fog text-ink",
@@ -209,7 +218,7 @@ export default function AgentScopedMarkdownPage({
                   }
                 }}
                 className="min-w-[12rem] flex-1 rounded-xl border border-line bg-fog/40 px-3 py-1.5 font-display text-xl text-ink outline-none focus:border-moss focus:ring-2 focus:ring-moss/30 sm:text-2xl"
-                aria-label="Rename item"
+                aria-label={t("markdown.renameAria")}
                 autoFocus
               />
             ) : (
@@ -222,7 +231,7 @@ export default function AgentScopedMarkdownPage({
                 ].join(" ")}
                 title={
                   canRename && selectedId && onRenameItem
-                    ? "Click to rename"
+                    ? t("markdown.clickToRename")
                     : undefined
                 }
                 onClick={() => {
@@ -231,14 +240,14 @@ export default function AgentScopedMarkdownPage({
                   setEditingTitle(true);
                 }}
               >
-                {editorTitle || "Select an item"}
+                {editorTitle || resolvedSelectItem}
               </h2>
             )}
             <div className="flex flex-wrap gap-2">
               <div
                 className="flex rounded-xl border border-line bg-fog/40 p-0.5"
                 role="tablist"
-                aria-label="Editor mode"
+                aria-label={t("markdown.editorModeAria")}
               >
                 <IconButton
                   type="button"
@@ -253,7 +262,7 @@ export default function AgentScopedMarkdownPage({
                       : "text-ink hover:bg-fog",
                   ].join(" ")}
                 >
-                  Source
+                  {t("markdown.source")}
                 </IconButton>
                 <IconButton
                   type="button"
@@ -268,7 +277,7 @@ export default function AgentScopedMarkdownPage({
                       : "text-ink hover:bg-fog",
                   ].join(" ")}
                 >
-                  Preview
+                  {t("markdown.preview")}
                 </IconButton>
               </div>
               <IconButton
@@ -278,7 +287,7 @@ export default function AgentScopedMarkdownPage({
                 disabled={!selectedId}
                 className="rounded-xl bg-moss px-4 py-2 text-sm font-semibold text-white hover:bg-moss-deep disabled:opacity-50"
               >
-                Save
+                {t("markdown.save")}
               </IconButton>
               {canRename && onRenameItem ? (
                 <IconButton
@@ -288,7 +297,7 @@ export default function AgentScopedMarkdownPage({
                   disabled={!selectedId}
                   className="rounded-xl border border-line bg-fog px-4 py-2 text-sm hover:bg-fog/80 disabled:opacity-50"
                 >
-                  Rename
+                  {t("markdown.rename")}
                 </IconButton>
               ) : null}
               {canDelete ? (
@@ -299,7 +308,7 @@ export default function AgentScopedMarkdownPage({
                   disabled={!selectedId}
                   className="rounded-xl border border-line bg-fog px-4 py-2 text-sm hover:bg-fog/80 disabled:opacity-50"
                 >
-                  Delete
+                  {t("markdown.delete")}
                 </IconButton>
               ) : null}
             </div>
@@ -319,7 +328,7 @@ export default function AgentScopedMarkdownPage({
               dangerouslySetInnerHTML={{
                 __html: selectedId
                   ? renderMarkdownToHtml(draft)
-                  : "<p class='text-muted'>Select an item</p>",
+                  : `<p class='text-muted'>${resolvedSelectItem}</p>`,
               }}
             />
           )}

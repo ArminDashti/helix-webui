@@ -311,6 +311,19 @@ export async function saveRuleAssignments(assignments) {
   });
 }
 
+export async function fetchSkillAssignments() {
+  const data = await requestJson("/api/skills/assignments/");
+  return data.assignments;
+}
+
+export async function saveSkillAssignments(assignments) {
+  return requestJson("/api/skills/assignments/", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ assignments }),
+  });
+}
+
 export async function fetchDatabaseSettings() {
   return requestJson("/api/admin/database/");
 }
@@ -374,9 +387,9 @@ export async function saveOpenRouterSettings(openrouter) {
   });
 }
 
-export async function fetchOpenRouterModels({ force = false } = {}) {
+export async function fetchOpenRouterModels({ force = false, silent = false } = {}) {
   const qs = force ? "?force=1" : "";
-  return requestJson(`/api/admin/openrouter/models/${qs}`);
+  return requestJson(`/api/admin/openrouter/models/${qs}`, { silent });
 }
 
 export async function fetchCursorSettings() {
@@ -582,6 +595,25 @@ export async function streamRun(
         result = payload;
       }
       if (payload.event === "error") {
+        // #region agent log
+        fetch("http://127.0.0.1:7706/ingest/ac544aa8-f980-4348-bd8e-331cdfbc33b6", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Debug-Session-Id": "9f5f92",
+          },
+          body: JSON.stringify({
+            sessionId: "9f5f92",
+            location: "client.js:streamRun",
+            message: "SSE error event",
+            data: {
+              error: payload.error || payload.message || "Run failed",
+            },
+            timestamp: Date.now(),
+            hypothesisId: "C",
+          }),
+        }).catch(() => {});
+        // #endregion
         const apiErr = new ApiError({
           kind: "stream",
           title: "Run stream failed",
@@ -595,6 +627,23 @@ export async function streamRun(
   }
 
   if (!result) {
+    // #region agent log
+    fetch("http://127.0.0.1:7706/ingest/ac544aa8-f980-4348-bd8e-331cdfbc33b6", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Debug-Session-Id": "9f5f92",
+      },
+      body: JSON.stringify({
+        sessionId: "9f5f92",
+        location: "client.js:streamRun",
+        message: "Stream ended without result",
+        data: { bufferTailLen: buffer.length },
+        timestamp: Date.now(),
+        hypothesisId: "B",
+      }),
+    }).catch(() => {});
+    // #endregion
     const apiErr = new ApiError({
       kind: "stream",
       title: "Run stream failed",
@@ -605,4 +654,31 @@ export async function streamRun(
     throw apiErr;
   }
   return result;
+}
+
+/**
+ * Calculate the full result first, then return it (no SSE).
+ * This avoids realtime streaming UI updates.
+ */
+export async function runChat(
+  { prompt, mode, language = "en", report_type, chart_type, columns },
+  signal,
+) {
+  const path = "/api/chat";
+  const body = {
+    prompt,
+    mode,
+    language,
+  };
+  if (report_type) body.report_type = report_type;
+  if (chart_type) body.chart_type = chart_type;
+  if (columns?.length) body.columns = columns;
+
+  const response = await requestJson(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal,
+  });
+  return response;
 }

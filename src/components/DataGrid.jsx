@@ -1,12 +1,16 @@
+import { useI18n } from "../context/I18nContext.jsx";
+
 export default function DataGrid({
   columns,
   rows,
-  emptyLabel = "None",
+  emptyLabel,
   onRowClick,
 }) {
+  const { t } = useI18n();
+  const emptyText = emptyLabel ?? t("common.none");
   return (
     <div className="min-h-0 flex-1 overflow-auto rounded-2xl border border-line/80 bg-paper/80">
-      <table className="min-w-full text-left font-sans text-sm">
+      <table className="min-w-full text-start font-sans text-sm">
         <thead className="sticky top-0 bg-fog/80 text-xs uppercase tracking-wide text-muted backdrop-blur">
           <tr>
             {columns.map((col) => (
@@ -23,7 +27,7 @@ export default function DataGrid({
                 className="px-3 py-4 font-sans text-sm text-muted"
                 colSpan={columns.length}
               >
-                {emptyLabel}
+                {emptyText}
               </td>
             </tr>
           ) : (

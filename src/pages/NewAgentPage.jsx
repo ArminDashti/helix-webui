@@ -4,6 +4,8 @@ import { Bot, Plus } from "lucide-react";
 import { createAgent } from "../api/client.js";
 import IconButton from "../components/IconButton.jsx";
 import PageHeader from "../components/PageHeader.jsx";
+import { useI18n } from "../context/I18nContext.jsx";
+import { failMessage } from "../i18n/apiErrors.js";
 
 const PIPELINE_DESIGNER_HINT = {
   id: "pipeline_designer",
@@ -17,6 +19,7 @@ const inputClass =
 
 export default function NewAgentPage() {
   const navigate = useNavigate();
+  const { t } = useI18n();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [newId, setNewId] = useState(PIPELINE_DESIGNER_HINT.id);
@@ -28,9 +31,9 @@ export default function NewAgentPage() {
 
   function fillPipelineDesigner() {
     setNewId(PIPELINE_DESIGNER_HINT.id);
-    setNewName(PIPELINE_DESIGNER_HINT.name);
-    setNewHumanName(PIPELINE_DESIGNER_HINT.human_name);
-    setNewDescription(PIPELINE_DESIGNER_HINT.description);
+    setNewName(t("agents.templateRole"));
+    setNewHumanName(t("agents.templateHuman"));
+    setNewDescription(t("agents.templateDescription"));
   }
 
   async function handleCreateAgent(event) {
@@ -46,7 +49,11 @@ export default function NewAgentPage() {
       });
       navigate("/agents");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create agent");
+      setError(
+        err instanceof Error
+          ? failMessage(err, t, "agents.createFailed")
+          : t("agents.createFailed"),
+      );
     } finally {
       setSaving(false);
     }
@@ -54,7 +61,7 @@ export default function NewAgentPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
-      <PageHeader icon={Bot} title="New agent" backTo="/agents" />
+      <PageHeader icon={Bot} title={t("agents.newTitle")} backTo="/agents" />
       {error ? (
         <p className="rounded-xl border border-warn-border bg-warn-bg px-4 py-2 text-sm text-warn">
           {error}
@@ -71,52 +78,50 @@ export default function NewAgentPage() {
             onClick={fillPipelineDesigner}
             className="rounded-lg border border-line px-3 py-1 text-xs font-medium text-ink hover:bg-fog"
           >
-            Use Pipeline Designer template
+            {t("agents.templateButton")}
           </IconButton>
         </div>
         <div className="grid gap-3 md:grid-cols-2">
           <label className="block text-sm">
-            <span className="font-medium text-ink">Id</span>
+            <span className="font-medium text-ink">{t("common.id")}</span>
             <input
               value={newId}
               onChange={(e) => setNewId(e.target.value)}
               className={inputClass}
-              placeholder="pipeline_designer"
+              placeholder={t("agents.idPlaceholder")}
               required
             />
           </label>
           <label className="block text-sm">
-            <span className="font-medium text-ink">Human name</span>
+            <span className="font-medium text-ink">{t("agents.colHumanName")}</span>
             <input
               value={newHumanName}
               onChange={(e) => setNewHumanName(e.target.value)}
               className={inputClass}
-              placeholder="Maya"
+              placeholder={t("agents.humanPlaceholder")}
               required
             />
           </label>
           <label className="block text-sm">
-            <span className="font-medium text-ink">Role</span>
+            <span className="font-medium text-ink">{t("agents.colRole")}</span>
             <input
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               className={inputClass}
-              placeholder="Pipeline Designer"
+              placeholder={t("agents.rolePlaceholder")}
               required
             />
           </label>
         </div>
         <label className="block text-sm">
-          <span className="font-medium text-ink">Description</span>
+          <span className="font-medium text-ink">{t("agents.description")}</span>
           <input
             value={newDescription}
             onChange={(e) => setNewDescription(e.target.value)}
             className={inputClass}
           />
         </label>
-        <p className="text-sm text-muted">
-          Agents use assigned rules and skills only.
-        </p>
+        <p className="text-sm text-muted">{t("agents.assignedOnlyHint")}</p>
         <div className="flex flex-wrap gap-2">
           <IconButton
             type="submit"
@@ -124,7 +129,7 @@ export default function NewAgentPage() {
             disabled={saving}
             className="rounded-xl bg-moss px-5 py-2.5 text-sm font-semibold text-white hover:bg-moss-deep disabled:opacity-50"
           >
-            {saving ? "Creating…" : "Create agent"}
+            {saving ? t("common.creating") : t("agents.create")}
           </IconButton>
         </div>
       </form>

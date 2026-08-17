@@ -4,6 +4,8 @@ import { Save, Scale } from "lucide-react";
 import { fetchRules, renameRule, updateRule } from "../api/client.js";
 import IconButton from "../components/IconButton.jsx";
 import PageHeader from "../components/PageHeader.jsx";
+import { useI18n } from "../context/I18nContext.jsx";
+import { failMessage } from "../i18n/apiErrors.js";
 
 const inputClass =
   "mt-1 w-full rounded-xl border border-line bg-fog/40 px-3 py-2 text-sm outline-none focus:border-moss focus:ring-2 focus:ring-moss/30";
@@ -11,6 +13,7 @@ const inputClass =
 export default function EditRulePage() {
   const { ruleId } = useParams();
   const navigate = useNavigate();
+  const { t } = useI18n();
   const [rule, setRule] = useState(null);
   const [name, setName] = useState("");
   const [idDraft, setIdDraft] = useState("");
@@ -27,7 +30,7 @@ export default function EditRulePage() {
         if (cancelled) return;
         const found = (rules || []).find((r) => r.id === ruleId);
         if (!found) {
-          setError("Rule not found");
+          setError(t("rules.notFound"));
           return;
         }
         setRule(found);
@@ -36,7 +39,7 @@ export default function EditRulePage() {
         setContent(found.content || "");
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load");
+          setError(failMessage(err, t, "common.failedToLoad"));
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -45,7 +48,7 @@ export default function EditRulePage() {
     return () => {
       cancelled = true;
     };
-  }, [ruleId]);
+  }, [ruleId, t]);
 
   async function handleSave(event) {
     event.preventDefault();
@@ -60,24 +63,23 @@ export default function EditRulePage() {
       }
       await updateRule(currentId, {
         content,
-        agents: [],
         name,
       });
       navigate("/rules");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Save failed");
+      setError(failMessage(err, t, "common.saveFailed"));
     } finally {
       setSaving(false);
     }
   }
 
   if (loading) {
-    return <p className="text-sm text-muted">Loading…</p>;
+    return <p className="text-sm text-muted">{t("common.loading")}</p>;
   }
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
-      <PageHeader icon={Scale} title="Edit rule" backTo="/rules" />
+      <PageHeader icon={Scale} title={t("rules.editTitle")} backTo="/rules" />
       {error ? (
         <p className="rounded-xl border border-warn-border bg-warn-bg px-4 py-2 text-sm text-warn">
           {error}
@@ -89,7 +91,7 @@ export default function EditRulePage() {
       >
         <div className="grid gap-3 md:grid-cols-2">
           <label className="block text-sm">
-            <span className="font-medium text-ink">Id</span>
+            <span className="font-medium text-ink">{t("common.id")}</span>
             <input
               value={idDraft}
               onChange={(e) => setIdDraft(e.target.value)}
@@ -98,7 +100,7 @@ export default function EditRulePage() {
             />
           </label>
           <label className="block text-sm">
-            <span className="font-medium text-ink">Name</span>
+            <span className="font-medium text-ink">{t("common.name")}</span>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -108,7 +110,7 @@ export default function EditRulePage() {
           </label>
         </div>
         <label className="flex min-h-0 flex-1 flex-col text-sm">
-          <span className="font-medium text-ink">Content</span>
+          <span className="font-medium text-ink">{t("rules.content")}</span>
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
@@ -123,7 +125,7 @@ export default function EditRulePage() {
             disabled={saving}
             className="rounded-xl bg-moss px-5 py-2.5 text-sm font-semibold text-white hover:bg-moss-deep disabled:opacity-50"
           >
-            {saving ? "Saving…" : "Save rule"}
+            {saving ? t("common.saving") : t("rules.save")}
           </IconButton>
         </div>
       </form>

@@ -1,3 +1,4 @@
+import { useI18n } from "../context/I18nContext.jsx";
 import WhenChips from "./WhenChips.jsx";
 import {
   DEFAULT_EDGE_LIMIT,
@@ -17,6 +18,7 @@ export default function EdgeKindFields({
   onChange,
   idPrefix = "edge",
 }) {
+  const { t, locale } = useI18n();
   const fields = fieldsForKind(kind);
   const cap = limit != null ? limit : DEFAULT_EDGE_LIMIT;
 
@@ -28,27 +30,33 @@ export default function EdgeKindFields({
     <div className="space-y-3 text-sm">
       {showKindSelect ? (
         <label className="block text-xs">
-          <span className="font-medium text-ink">Edge</span>
+          <span className="font-medium text-ink">{t("pipeline.edgeLabel")}</span>
           <select
             id={`${idPrefix}-kind`}
             value={kind || "forward"}
             onChange={(e) => patch({ kind: e.target.value })}
             className="mt-1 w-full rounded-xl border border-line bg-fog/40 px-3 py-1.5 text-sm outline-none focus:border-moss"
           >
-            {sortByLabel(EDGE_KINDS).map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
+            {sortByLabel(EDGE_KINDS, (opt) => t(`pipeline.kind.${opt.value}`), locale).map(
+              (opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {t(`pipeline.kind.${opt.value}`)}
+                </option>
+              ),
+            )}
           </select>
         </label>
       ) : null}
       {fields.includes("when") ? (
-        <WhenChips when={when} idPrefix={idPrefix} onChange={(next) => patch({ when: next })} />
+        <WhenChips
+          when={when}
+          idPrefix={idPrefix}
+          onChange={(next) => patch({ when: next })}
+        />
       ) : null}
       {fields.includes("status") ? (
         <label className="block text-xs">
-          <span className="font-medium text-ink">Result is</span>
+          <span className="font-medium text-ink">{t("pipeline.resultIs")}</span>
           <input
             id={`${idPrefix}-status`}
             value={when?.status || ""}
@@ -56,20 +64,20 @@ export default function EdgeKindFields({
               patch({ when: { type: "on_status", status: e.target.value } })
             }
             className="mt-1 w-full rounded-xl border border-line bg-fog/40 px-3 py-1.5 text-sm outline-none focus:border-moss"
-            placeholder="done"
+            placeholder={t("pipeline.statusPlaceholder")}
           />
         </label>
       ) : null}
       {fields.includes("target") && agents.length ? (
         <label className="block text-xs">
-          <span className="font-medium text-ink">Agent</span>
+          <span className="font-medium text-ink">{t("pipeline.agent")}</span>
           <select
             id={`${idPrefix}-target`}
             value={target || ""}
             onChange={(e) => patch({ target: e.target.value })}
             className="mt-1 w-full rounded-xl border border-line bg-fog/40 px-3 py-1.5 text-sm outline-none focus:border-moss"
           >
-            {sortByLabel(agents, (a) => agentCompanyLabel(a)).map((a) => (
+            {sortByLabel(agents, (a) => agentCompanyLabel(a), locale).map((a) => (
               <option key={a.id} value={a.id} title={a.id}>
                 {agentCompanyLabel(a)}
               </option>
@@ -79,7 +87,7 @@ export default function EdgeKindFields({
       ) : null}
       {fields.includes("limit") ? (
         <label className="block text-xs">
-          <span className="font-medium text-ink">Limit</span>
+          <span className="font-medium text-ink">{t("pipeline.limit")}</span>
           <input
             id={`${idPrefix}-limit`}
             type="number"

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Save, X } from "lucide-react";
+import { useI18n } from "../context/I18nContext.jsx";
 import IconButton from "./IconButton.jsx";
 
 const inputClass =
@@ -12,6 +13,7 @@ export default function ColumnDocsModal({
   onClose,
   onSave,
 }) {
+  const { t } = useI18n();
   const [sqlDescription, setSqlDescription] = useState("");
   const [description, setDescription] = useState("");
 
@@ -37,7 +39,7 @@ export default function ColumnDocsModal({
         <header className="flex items-start justify-between gap-3 border-b border-line/80 px-4 py-3">
           <div>
             <h2 id="column-docs-title" className="font-display text-lg text-ink">
-              Edit column
+              {t("docs.editColumn")}
             </h2>
             <p className="mt-0.5 font-sans text-sm text-muted">{column.name}</p>
           </div>
@@ -47,7 +49,7 @@ export default function ColumnDocsModal({
             onClick={onClose}
             className="rounded-xl border border-line bg-fog px-3 py-1.5 text-sm font-medium text-ink hover:bg-fog/80"
           >
-            Close
+            {t("common.close")}
           </IconButton>
         </header>
 
@@ -67,7 +69,7 @@ export default function ColumnDocsModal({
             </p>
           ) : null}
           <label className="block text-sm">
-            <span className="font-medium text-ink">sql-description</span>
+            <span className="font-medium text-ink">{t("docs.sqlDescription")}</span>
             <textarea
               value={sqlDescription}
               onChange={(e) => setSqlDescription(e.target.value)}
@@ -76,7 +78,7 @@ export default function ColumnDocsModal({
             />
           </label>
           <label className="block text-sm">
-            <span className="font-medium text-ink">description</span>
+            <span className="font-medium text-ink">{t("docs.description")}</span>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -91,7 +93,7 @@ export default function ColumnDocsModal({
               disabled={saving}
               className="rounded-xl bg-moss px-4 py-2 text-sm font-semibold text-white hover:bg-moss-deep disabled:opacity-50"
             >
-              {saving ? "Saving…" : "Save"}
+              {saving ? t("common.saving") : t("common.save")}
             </IconButton>
           </footer>
         </form>

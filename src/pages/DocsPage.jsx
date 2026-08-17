@@ -5,8 +5,11 @@ import ColumnDocsModal from "../components/ColumnDocsModal.jsx";
 import DataGrid from "../components/DataGrid.jsx";
 import IconButton from "../components/IconButton.jsx";
 import PageHeader from "../components/PageHeader.jsx";
+import { useI18n } from "../context/I18nContext.jsx";
+import { failMessage, translateKnownMessage } from "../i18n/apiErrors.js";
 
 export default function DocsPage() {
+  const { t } = useI18n();
   const [tables, setTables] = useState([]);
   const [selected, setSelected] = useState(null);
   const [detail, setDetail] = useState(null);
@@ -31,12 +34,12 @@ export default function DocsPage() {
         const first = data.tables?.[0]?.full_name;
         if (first) setSelected(first);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load docs");
+        setError(failMessage(err, t, "docs.loadFailed"));
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (!selected) {
@@ -57,7 +60,7 @@ export default function DocsPage() {
       } catch (err) {
         if (!cancelled) {
           setDetail(null);
-          setError(err instanceof Error ? err.message : "Failed to load table");
+          setError(failMessage(err, t, "docs.loadTableFailed"));
         }
       } finally {
         if (!cancelled) setDetailLoading(false);
@@ -66,7 +69,7 @@ export default function DocsPage() {
     return () => {
       cancelled = true;
     };
-  }, [selected]);
+  }, [selected, t]);
 
   const filteredTables = useMemo(() => {
     const q = tableFilter.trim().toLowerCase();
@@ -87,55 +90,64 @@ export default function DocsPage() {
     [detail],
   );
 
-  const columnGrid = [
-    {
-      key: "name",
-      label: "Column",
-      render: (col) => (
-        <span className="font-sans text-[13px]">{col.name}</span>
-      ),
-    },
-    {
-      key: "data_type",
-      label: "Type",
-      render: (col) => (
-        <span className="text-muted">{col.data_type || "—"}</span>
-      ),
-    },
-    {
-      key: "nullable",
-      label: "Null",
-      render: (col) => (
-        <span className="text-muted">{col.nullable ? "YES" : "NO"}</span>
-      ),
-    },
-    {
-      key: "sql_description",
-      label: "sql-description",
-      render: (col) =>
-        col.sql_description || (
-          <span className="text-muted">No sql-description</span>
+  const columnGrid = useMemo(
+    () => [
+      {
+        key: "name",
+        label: t("docs.colColumn"),
+        render: (col) => (
+          <span className="font-sans text-[13px]">{col.name}</span>
         ),
-    },
-    {
-      key: "description",
-      label: "description",
-      render: (col) =>
-        col.description || <span className="text-muted">No description</span>,
-    },
-  ];
+      },
+      {
+        key: "data_type",
+        label: t("docs.colType"),
+        render: (col) => (
+          <span className="text-muted">{col.data_type || t("common.noneDash")}</span>
+        ),
+      },
+      {
+        key: "nullable",
+        label: t("docs.colNull"),
+        render: (col) => (
+          <span className="text-muted">
+            {col.nullable ? t("docs.nullableYes") : t("docs.nullableNo")}
+          </span>
+        ),
+      },
+      {
+        key: "sql_description",
+        label: t("docs.colSqlDescription"),
+        render: (col) =>
+          col.sql_description || (
+            <span className="text-muted">{t("docs.noSqlDescription")}</span>
+          ),
+      },
+      {
+        key: "description",
+        label: t("docs.colDescription"),
+        render: (col) =>
+          col.description || (
+            <span className="text-muted">{t("docs.noDescription")}</span>
+          ),
+      },
+    ],
+    [t],
+  );
 
   if (loading) {
-    return <p className="text-sm text-muted">Loading database docs…</p>;
+    return <p className="text-sm text-muted">{t("docs.loading")}</p>;
   }
 
   return (
     <div className="hx-rise flex h-full min-h-0 flex-col gap-2">
-      <PageHeader icon={Table2} title="Table docs" />
+      <PageHeader icon={Table2} title={t("docs.title")} />
 
       {listError ? (
         <p className="shrink-0 rounded-xl border border-warn-border bg-warn-bg px-4 py-2 text-sm text-warn">
-          Live schema unavailable: {listError}
+          {t("docs.liveSchemaUnavailable", {
+            error: translateKnownMessage(t, listError),
+          })}
         </p>
       ) : null}
       {error ? (
@@ -147,43 +159,43 @@ export default function DocsPage() {
       <div className="grid min-h-0 flex-1 gap-2 lg:grid-cols-[minmax(22rem,32rem)_1fr]">
         <aside className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-line/80 bg-paper/80 p-2">
           <label className="block px-1">
-            <span className="sr-only">Filter tables</span>
+            <span className="sr-only">{t("docs.filterSr")}</span>
             <input
               type="search"
               value={tableFilter}
               onChange={(e) => setTableFilter(e.target.value)}
-              placeholder="Filter tables…"
+              placeholder={t("docs.filterPlaceholder")}
               className="w-full rounded-lg border border-line bg-fog/40 px-2 py-1.5 text-sm outline-none focus:border-moss"
             />
           </label>
           <ul className="mt-1 min-h-0 flex-1 space-y-0.5 overflow-y-auto">
             {tables.length === 0 ? (
-              <li className="px-2 py-2 text-sm text-muted">No tables found</li>
+              <li className="px-2 py-2 text-sm text-muted">{t("docs.noTables")}</li>
             ) : filteredTables.length === 0 ? (
-              <li className="px-2 py-2 text-sm text-muted">No matching tables</li>
+              <li className="px-2 py-2 text-sm text-muted">{t("docs.noMatching")}</li>
             ) : (
-              filteredTables.map((t) => (
-                <li key={t.full_name}>
+              filteredTables.map((tbl) => (
+                <li key={tbl.full_name}>
                   <button
                     type="button"
-                    onClick={() => setSelected(t.full_name)}
+                    onClick={() => setSelected(tbl.full_name)}
                     className={[
-                      "w-full rounded-xl px-3 py-1.5 text-left text-sm transition",
-                      selected === t.full_name
+                      "w-full rounded-xl px-3 py-1.5 text-start text-sm transition",
+                      selected === tbl.full_name
                         ? "bg-moss text-white"
                         : "text-ink hover:bg-fog",
                     ].join(" ")}
                   >
                     <span className="block break-all whitespace-normal font-medium">
-                      {t.full_name}
+                      {tbl.full_name}
                     </span>
                     <span
                       className={[
                         "block text-[11px]",
-                        selected === t.full_name ? "text-white/80" : "text-muted",
+                        selected === tbl.full_name ? "text-white/80" : "text-muted",
                       ].join(" ")}
                     >
-                      {t.kind || "table"}
+                      {tbl.kind || t("docs.kindFallback")}
                     </span>
                   </button>
                 </li>
@@ -194,13 +206,13 @@ export default function DocsPage() {
 
         <section className="min-h-0 overflow-y-auto rounded-2xl border border-line/80 bg-paper/80 p-4">
           {detailLoading ? (
-            <p className="text-sm text-muted">Loading table…</p>
+            <p className="text-sm text-muted">{t("docs.loadingTable")}</p>
           ) : !detail ? (
-            <p className="text-sm text-muted">Select a table</p>
+            <p className="text-sm text-muted">{t("docs.selectTable")}</p>
           ) : (
             <div className="space-y-4">
               <div>
-                <h3 className="mb-1 text-sm font-semibold text-ink">Overview</h3>
+                <h3 className="mb-1 text-sm font-semibold text-ink">{t("docs.overview")}</h3>
                 <textarea
                   value={overviewDraft}
                   onChange={(e) => {
@@ -208,7 +220,7 @@ export default function DocsPage() {
                     setOverviewDirty(true);
                   }}
                   rows={5}
-                  placeholder="Write an explanation for this table…"
+                  placeholder={t("docs.overviewPlaceholder")}
                   className="w-full resize-y rounded-xl border border-line bg-fog/40 px-3 py-2 text-sm leading-relaxed text-ink outline-none focus:border-moss focus:ring-2 focus:ring-moss/30"
                 />
                 <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -229,30 +241,26 @@ export default function DocsPage() {
                         setOverviewDraft(data.overview || "");
                         setOverviewDirty(false);
                       } catch (err) {
-                        setError(
-                          err instanceof Error
-                            ? err.message
-                            : "Failed to save explanation",
-                        );
+                        setError(failMessage(err, t, "docs.saveExplanationFailed"));
                       } finally {
                         setSavingOverview(false);
                       }
                     }}
                     className="rounded-xl bg-moss px-4 py-2 text-sm font-semibold text-white hover:bg-moss-deep disabled:opacity-50"
                   >
-                    {savingOverview ? "Saving…" : "Save explanation"}
+                    {savingOverview ? t("common.saving") : t("docs.saveExplanation")}
                   </IconButton>
                   {overviewDirty ? (
-                    <span className="text-xs text-muted">Unsaved changes</span>
+                    <span className="text-xs text-muted">{t("docs.unsaved")}</span>
                   ) : null}
                 </div>
               </div>
               <div>
-                <h3 className="mb-2 text-sm font-semibold text-ink">Columns</h3>
+                <h3 className="mb-2 text-sm font-semibold text-ink">{t("docs.columns")}</h3>
                 <DataGrid
                   columns={columnGrid}
                   rows={columnRows}
-                  emptyLabel="No columns"
+                  emptyLabel={t("docs.noColumns")}
                   onRowClick={(col) => {
                     setColumnError(null);
                     setEditingColumn(col);
@@ -285,9 +293,7 @@ export default function DocsPage() {
             setDetail(data);
             setEditingColumn(null);
           } catch (err) {
-            setColumnError(
-              err instanceof Error ? err.message : "Failed to save column",
-            );
+            setColumnError(failMessage(err, t, "docs.saveColumnFailed"));
           } finally {
             setSavingColumn(false);
           }

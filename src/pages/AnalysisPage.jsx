@@ -1,12 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BarChart3, Play } from "lucide-react";
-import { fetchAgents, streamRun, createResult } from "../api/client.js";
+import { fetchAgents, runChat, createResult } from "../api/client.js";
 import ErrorModal from "../components/ErrorModal.jsx";
 import IconButton from "../components/IconButton.jsx";
 import PageHeader from "../components/PageHeader.jsx";
 import RunProgressModal from "../components/RunProgressModal.jsx";
 import { useApiStatus } from "../context/ApiStatusContext.jsx";
+import { useI18n } from "../context/I18nContext.jsx";
+import { translateKnownMessage } from "../i18n/apiErrors.js";
+import { readStoredLocale } from "../i18n/applyLocale.js";
+import { translate } from "../i18n/messages.js";
 import { agentCompanyLabel } from "../utils/agentLabel.js";
 import {
   parseColumns,
@@ -14,34 +18,6 @@ import {
   textLang,
 } from "../utils/textDirection.js";
 import { sortByLabel } from "../utils/sortOptions.js";
-
-const MODES = sortByLabel([
-  { value: "chart", label: "Chart" },
-  { value: "grid", label: "Grid" },
-  { value: "research", label: "Research" },
-]);
-
-const LANGUAGES = sortByLabel([
-  { value: "en", label: "English" },
-  { value: "fa", label: "Persian" },
-]);
-
-const RESEARCH_LEVELS = [
-  { value: "low", label: "Low" },
-  { value: "medium", label: "Medium" },
-  { value: "high", label: "High" },
-];
-
-const CHART_TYPES = sortByLabel([
-  { value: "bar", label: "Bar" },
-  { value: "line", label: "Line" },
-  { value: "area", label: "Area" },
-  { value: "pie", label: "Pie" },
-  { value: "donut", label: "Donut" },
-  { value: "scatter", label: "Scatter" },
-  { value: "stacked_bar", label: "Stacked bar" },
-  { value: "horizontal_bar", label: "Horizontal bar" },
-]);
 
 const selectClass =
   "mt-1.5 w-full min-w-[8.5rem] rounded-xl border border-line bg-paper px-3 py-2.5 text-[15px] text-ink outline-none ring-moss/30 focus:border-moss focus:ring-2";
@@ -58,27 +34,23 @@ function needsChart(mode) {
   return mode === "chart" || mode === "analytical_report_chart";
 }
 
-function llmUnavailableMessage(health) {
+function llmUnavailableMessage(health, t) {
   if (!health) {
-    return "Cannot reach the API; LLM cannot be used.";
+    return t("analysis.llmUnreachable");
   }
-  const provider = health.provider === "cursor" ? "cursor" : "openrouter";
-  const block = health[provider];
+  const block = health.llm;
   if (block?.status === "configured") return null;
-  if (provider === "cursor") {
-    return block?.detail || "Cursor API key is not set";
-  }
-  return block?.detail || "OpenRouter API key is not set";
+  return translateKnownMessage(t, block?.detail) || t("analysis.apiKeyMissing");
 }
 
 export default function AnalysisPage() {
   const navigate = useNavigate();
   const { health, checkConnection } = useApiStatus();
-  const [prompt, setPrompt] = useState(
-    "Show total sales by product category",
+  const { t, locale } = useI18n();
+  const [prompt, setPrompt] = useState(() =>
+    translate(readStoredLocale(), "analysis.promptDefault"),
   );
   const [mode, setMode] = useState("chart");
-  const [language, setLanguage] = useState("en");
   const [reportType, setReportType] = useState("medium");
   const [chartType, setChartType] = useState("bar");
   const [columnsRaw, setColumnsRaw] = useState(
@@ -87,12 +59,53 @@ export default function AnalysisPage() {
   const [error, setError] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [running, setRunning] = useState(false);
-  const [messages, setMessages] = useState([]);
   const [runError, setRunError] = useState(null);
   const [activePrompt, setActivePrompt] = useState("");
   const [nameById, setNameById] = useState({});
   const [llmError, setLlmError] = useState(null);
   const abortRef = useRef(null);
+
+  const modes = useMemo(
+    () =>
+      sortByLabel(
+        [
+          { value: "chart", label: t("analysis.modeChart") },
+          { value: "grid", label: t("analysis.modeGrid") },
+          { value: "research", label: t("analysis.modeResearch") },
+        ],
+        (item) => item.label,
+        locale,
+      ),
+    [t, locale],
+  );
+
+  const researchLevels = useMemo(
+    () => [
+      { value: "low", label: t("analysis.researchLow") },
+      { value: "medium", label: t("analysis.researchMedium") },
+      { value: "high", label: t("analysis.researchHigh") },
+    ],
+    [t],
+  );
+
+  const chartTypes = useMemo(
+    () =>
+      sortByLabel(
+        [
+          { value: "bar", label: t("analysis.chartBar") },
+          { value: "line", label: t("analysis.chartLine") },
+          { value: "area", label: t("analysis.chartArea") },
+          { value: "pie", label: t("analysis.chartPie") },
+          { value: "donut", label: t("analysis.chartDonut") },
+          { value: "scatter", label: t("analysis.chartScatter") },
+          { value: "stacked_bar", label: t("analysis.chartStackedBar") },
+          { value: "horizontal_bar", label: t("analysis.chartHorizontalBar") },
+        ],
+        (item) => item.label,
+        locale,
+      ),
+    [t, locale],
+  );
 
   useEffect(() => {
     return () => {
@@ -124,20 +137,19 @@ export default function AnalysisPage() {
     event.preventDefault();
     const trimmed = prompt.trim();
     if (!trimmed) {
-      setError("Enter a prompt first.");
+      setError(t("analysis.promptRequired"));
       return;
     }
     const latest = (await checkConnection({ silent: true })) || health;
-    const llmMessage = llmUnavailableMessage(latest);
+    const llmMessage = llmUnavailableMessage(latest, t);
     if (llmMessage) {
       setError(llmMessage);
-      setLlmError({ title: "Cannot run", message: llmMessage });
+      setLlmError({ title: t("analysis.cannotRun"), message: llmMessage });
       return;
     }
     setError(null);
     setLlmError(null);
     setRunError(null);
-    setMessages([]);
     setActivePrompt(trimmed);
     setModalOpen(true);
     setRunning(true);
@@ -146,7 +158,7 @@ export default function AnalysisPage() {
     const payload = {
       prompt: trimmed,
       mode,
-      language,
+      language: locale,
       report_type: needsType(mode) ? reportType : undefined,
       chart_type: needsChart(mode) ? chartType : undefined,
       columns,
@@ -157,31 +169,24 @@ export default function AnalysisPage() {
     abortRef.current = controller;
 
     try {
-      const final = await streamRun(payload, (evt) => {
-        if (evt.event === "step" && evt.message) {
-          setMessages((prev) => [
-            ...prev,
-            {
-              agent_id: evt.agent_id,
-              status: evt.status,
-              message: evt.message,
-            },
-          ]);
-        }
-      }, controller.signal);
+      const final = await runChat(payload, controller.signal);
       setModalOpen(false);
       setRunning(false);
       await createResult({
         prompt: trimmed,
         mode,
-        language,
+        language: locale,
         payload: final,
       });
       navigate("/results");
     } catch (err) {
       if (err?.name === "AbortError") return;
       setRunning(false);
-      setRunError(err instanceof Error ? err.message : "Run failed");
+      setRunError(
+        err instanceof Error
+          ? translateKnownMessage(t, err.message)
+          : t("analysis.runFailed"),
+      );
     }
   }
 
@@ -199,13 +204,13 @@ export default function AnalysisPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
-      <PageHeader icon={BarChart3} title="Analysis" />
+      <PageHeader icon={BarChart3} title={t("analysis.title")} />
       <form
         onSubmit={handleRun}
         className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto rounded-2xl border border-line/80 bg-paper/80 p-4 shadow-[0_20px_50px_-30px_rgba(0,0,0,0.45)] backdrop-blur-sm sm:p-5"
       >
         <label htmlFor="prompt" className="block text-sm font-medium text-ink">
-          Prompt
+          {t("analysis.prompt")}
         </label>
         <textarea
           id="prompt"
@@ -214,13 +219,13 @@ export default function AnalysisPage() {
           lang={textLang(prompt)}
           onChange={(e) => setPrompt(e.target.value)}
           className="min-h-[8rem] w-full flex-1 resize-y rounded-xl border border-line bg-paper px-4 py-3 text-[15px] leading-relaxed text-ink outline-none ring-moss/30 transition focus:border-moss focus:ring-2"
-          placeholder="e.g. Cluster clients by revenue and usage"
+          placeholder={t("analysis.promptPlaceholder")}
         />
 
         <div className="flex flex-col gap-3">
           <div>
             <label htmlFor="mode" className="block text-sm font-medium text-ink">
-              Mode
+              {t("analysis.mode")}
             </label>
             <select
               id="mode"
@@ -228,7 +233,7 @@ export default function AnalysisPage() {
               onChange={(e) => setMode(e.target.value)}
               className={selectClass}
             >
-              {MODES.map((item) => (
+              {modes.map((item) => (
                 <option key={item.value} value={item.value}>
                   {item.label}
                 </option>
@@ -242,7 +247,7 @@ export default function AnalysisPage() {
                 htmlFor="research_level"
                 className="block text-sm font-medium text-ink"
               >
-                Research
+                {t("analysis.research")}
               </label>
               <select
                 id="research_level"
@@ -250,7 +255,7 @@ export default function AnalysisPage() {
                 onChange={(e) => setReportType(e.target.value)}
                 className={selectClass}
               >
-                {RESEARCH_LEVELS.map((item) => (
+                {researchLevels.map((item) => (
                   <option key={item.value} value={item.value}>
                     {item.label}
                   </option>
@@ -265,7 +270,7 @@ export default function AnalysisPage() {
                 htmlFor="chart_type"
                 className="block text-sm font-medium text-ink"
               >
-                Chart
+                {t("analysis.chart")}
               </label>
               <select
                 id="chart_type"
@@ -273,7 +278,7 @@ export default function AnalysisPage() {
                 onChange={(e) => setChartType(e.target.value)}
                 className={selectClass}
               >
-                {CHART_TYPES.map((item) => (
+                {chartTypes.map((item) => (
                   <option key={item.value} value={item.value}>
                     {item.label}
                   </option>
@@ -282,34 +287,13 @@ export default function AnalysisPage() {
             </div>
           ) : null}
 
-          <div>
-            <label
-              htmlFor="language"
-              className="block text-sm font-medium text-ink"
-            >
-              Language
-            </label>
-            <select
-              id="language"
-              value={language}
-              onChange={(e) => setLanguage(e.target.value)}
-              className={selectClass}
-            >
-              {LANGUAGES.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
           {mode === "grid" ? (
             <div>
               <label
                 htmlFor="grid_columns"
                 className="block text-sm font-medium text-ink"
               >
-                Columns
+                {t("analysis.columns")}
               </label>
               <input
                 id="grid_columns"
@@ -318,11 +302,11 @@ export default function AnalysisPage() {
                 dir={columnsDir}
                 lang={textLang(columnsRaw)}
                 onChange={(e) => setColumnsRaw(e.target.value)}
-                placeholder="Category/Product/OrderQty/LineTotal or Category, Product, Qty"
+                placeholder={t("analysis.columnsPlaceholder")}
                 className="mt-1.5 w-full rounded-xl border border-line bg-paper px-4 py-2.5 text-[15px] text-ink outline-none ring-moss/30 focus:border-moss focus:ring-2"
               />
               <p className="mt-1 text-xs text-muted">
-                Separate columns with / or ,
+                {t("analysis.columnsHint")}
               </p>
             </div>
           ) : null}
@@ -333,7 +317,7 @@ export default function AnalysisPage() {
             disabled={running}
             className="w-full rounded-xl bg-moss px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-moss-deep disabled:opacity-60 sm:w-auto"
           >
-            Run
+            {t("analysis.run")}
           </IconButton>
         </div>
       </form>
@@ -352,7 +336,7 @@ export default function AnalysisPage() {
       <RunProgressModal
         open={modalOpen}
         prompt={activePrompt}
-        messages={messages}
+        messages={[]}
         running={running}
         error={runError}
         onDismiss={dismissModal}

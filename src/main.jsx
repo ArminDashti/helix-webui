@@ -1,3 +1,8 @@
+import {
+  applyLocale,
+  readStoredLocale,
+} from "./i18n/applyLocale.js";
+
 const THEME_STORAGE_KEY = "helix-theme";
 
 function systemPrefersDark() {
@@ -16,6 +21,8 @@ try {
 } catch {
   document.documentElement.setAttribute("data-theme", "dark");
 }
+
+applyLocale(readStoredLocale());
 
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";

@@ -5,6 +5,8 @@ import DataGrid from "../components/DataGrid.jsx";
 import FlashMessage from "../components/FlashMessage.jsx";
 import IconButton from "../components/IconButton.jsx";
 import PageHeader from "../components/PageHeader.jsx";
+import { useI18n } from "../context/I18nContext.jsx";
+import { failMessage } from "../i18n/apiErrors.js";
 import useFlash from "../lib/useFlash.js";
 
 const inputClass =
@@ -21,6 +23,7 @@ function isArmin(user) {
 }
 
 export default function AdminPage() {
+  const { t } = useI18n();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -38,12 +41,12 @@ export default function AdminPage() {
       try {
         await reload();
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load admin data");
+        setError(failMessage(err, t, "admin.loadFailed"));
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [t]);
 
   function resetUserForm() {
     setUserForm(emptyUserForm);
@@ -61,32 +64,32 @@ export default function AdminPage() {
       };
       if (editingUserId) {
         await updateUser(editingUserId, payload);
-        setStatus("User saved.");
+        setStatus(t("admin.userSaved"));
       } else {
         await createUser(payload);
-        setStatus("User created.");
+        setStatus(t("admin.userCreated"));
       }
       resetUserForm();
       await reload();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "User save failed");
+      setError(failMessage(err, t, "admin.saveFailed"));
     }
   }
 
   async function handleDeleteUser(user) {
     if (isArmin(user)) {
-      setError("Cannot delete the default admin armin");
+      setError(t("admin.cannotDeleteArmin"));
       return;
     }
-    if (!window.confirm(`Delete user “${user.username}”?`)) return;
+    if (!window.confirm(t("admin.deleteConfirm", { username: user.username }))) return;
     setError(null);
     try {
       await deleteUser(user.id);
       if (editingUserId === user.id) resetUserForm();
-      setStatus("User deleted.");
+      setStatus(t("admin.userDeleted"));
       await reload();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "User delete failed");
+      setError(failMessage(err, t, "admin.deleteFailed"));
     }
   }
 
@@ -95,61 +98,68 @@ export default function AdminPage() {
     [users],
   );
 
-  const userColumns = [
-    { key: "username", label: "Username", render: (user) => user.username },
-    { key: "display", label: "Name", render: (user) => user.display_name },
-    {
-      key: "admin",
-      label: "Admin",
-      render: (user) => (user.is_admin ? "Yes" : "No"),
-    },
-    {
-      key: "edit",
-      label: "Edit",
-      render: (user) => (
-        <IconButton
-          type="button"
-          icon={Pencil}
-          onClick={() => {
-            setEditingUserId(user.id);
-            setUserForm({
-              username: user.username,
-              display_name: user.display_name,
-              is_admin: Boolean(user.is_admin),
-            });
-          }}
-          className="rounded-lg border border-line bg-fog px-2 py-1.5 text-xs font-medium hover:bg-fog/80"
-        >
-          Edit
-        </IconButton>
-      ),
-    },
-    {
-      key: "delete",
-      label: "Delete",
-      render: (user) =>
-        isArmin(user) ? (
-          <span className="text-xs text-muted">Default admin</span>
-        ) : (
-        <IconButton
-          type="button"
-          icon={Trash2}
-          onClick={() => handleDeleteUser(user)}
-          className="rounded-lg border border-warn-border bg-warn-bg px-2 py-1.5 text-xs font-medium text-warn hover:opacity-90"
-        >
-          Delete
-        </IconButton>
+  const userColumns = useMemo(
+    () => [
+      { key: "username", label: t("admin.username"), render: (user) => user.username },
+      {
+        key: "display",
+        label: t("common.name"),
+        render: (user) => user.display_name,
+      },
+      {
+        key: "admin",
+        label: t("admin.isAdmin"),
+        render: (user) => (user.is_admin ? t("admin.yes") : t("admin.no")),
+      },
+      {
+        key: "edit",
+        label: t("common.edit"),
+        render: (user) => (
+          <IconButton
+            type="button"
+            icon={Pencil}
+            onClick={() => {
+              setEditingUserId(user.id);
+              setUserForm({
+                username: user.username,
+                display_name: user.display_name,
+                is_admin: Boolean(user.is_admin),
+              });
+            }}
+            className="rounded-lg border border-line bg-fog px-2 py-1.5 text-xs font-medium hover:bg-fog/80"
+          >
+            {t("common.edit")}
+          </IconButton>
         ),
-    },
-  ];
+      },
+      {
+        key: "delete",
+        label: t("common.delete"),
+        render: (user) =>
+          isArmin(user) ? (
+            <span className="text-xs text-muted">{t("admin.defaultAdmin")}</span>
+          ) : (
+            <IconButton
+              type="button"
+              icon={Trash2}
+              onClick={() => handleDeleteUser(user)}
+              className="rounded-lg border border-warn-border bg-warn-bg px-2 py-1.5 text-xs font-medium text-warn hover:opacity-90"
+            >
+              {t("common.delete")}
+            </IconButton>
+          ),
+      },
+    ],
+    [t],
+  );
 
   if (loading) {
-    return <p className="text-sm text-muted">Loading admin…</p>;
+    return <p className="text-sm text-muted">{t("admin.loading")}</p>;
   }
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
-      <PageHeader icon={Shield} title="Admin" />
+      <PageHeader icon={Shield} title={t("admin.title")} />
       {error ? (
         <p className="rounded-xl border border-warn-border bg-warn-bg px-4 py-2 text-sm text-warn">
           {error}
@@ -158,11 +168,11 @@ export default function AdminPage() {
       <FlashMessage message={status} />
 
       <section className="flex min-h-0 flex-1 flex-col gap-3 rounded-2xl border border-line/80 bg-paper/80 p-4">
-        <h2 className="font-display text-base text-ink">Users</h2>
+        <h2 className="font-display text-base text-ink">{t("admin.users")}</h2>
         <form onSubmit={handleSaveUser} className="flex flex-col gap-3">
           <div className="grid gap-3 md:grid-cols-3">
             <label className="block text-sm">
-              <span className="font-medium text-ink">Username</span>
+              <span className="font-medium text-ink">{t("admin.username")}</span>
               <input
                 value={userForm.username}
                 onChange={(e) =>
@@ -174,7 +184,7 @@ export default function AdminPage() {
               />
             </label>
             <label className="block text-sm">
-              <span className="font-medium text-ink">Display name</span>
+              <span className="font-medium text-ink">{t("admin.displayName")}</span>
               <input
                 value={userForm.display_name}
                 onChange={(e) =>
@@ -196,7 +206,7 @@ export default function AdminPage() {
                   setUserForm((prev) => ({ ...prev, is_admin: e.target.checked }))
                 }
               />
-              <span className="font-medium text-ink">Admin</span>
+              <span className="font-medium text-ink">{t("admin.isAdmin")}</span>
             </label>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -205,7 +215,7 @@ export default function AdminPage() {
               icon={editingUserId ? Pencil : Plus}
               className="rounded-xl bg-moss px-4 py-2 text-sm font-semibold text-white hover:bg-moss-deep"
             >
-              {editingUserId ? "Save user" : "Add user"}
+              {editingUserId ? t("admin.saveUser") : t("admin.addUser")}
             </IconButton>
             {editingUserId ? (
               <button
@@ -213,12 +223,12 @@ export default function AdminPage() {
                 onClick={resetUserForm}
                 className="rounded-xl border border-line px-3 py-2 text-sm"
               >
-                Cancel
+                {t("common.cancel")}
               </button>
             ) : null}
           </div>
         </form>
-        <DataGrid columns={userColumns} rows={userRows} emptyLabel="No users" />
+        <DataGrid columns={userColumns} rows={userRows} emptyLabel={t("admin.noUsers")} />
       </section>
     </div>
   );

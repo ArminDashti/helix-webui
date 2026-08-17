@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useI18n } from "../context/I18nContext.jsx";
 import { compareAz } from "../utils/sortOptions.js";
 
 function modelId(m) {
@@ -23,12 +24,14 @@ export default function ModelCombobox({
   models = [],
   loading = false,
   disabled = false,
-  placeholder = "Search models…",
+  placeholder,
 }) {
+  const { t, locale } = useI18n();
   const listId = useId();
   const rootRef = useRef(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState(value || "");
+  const resolvedPlaceholder = placeholder ?? t("models.search");
 
   useEffect(() => {
     setQuery(value || "");
@@ -54,11 +57,14 @@ export default function ModelCombobox({
       })
       .filter(Boolean);
     if (!list.some((m) => m.id.toLowerCase() === "auto")) {
-      list.push({ id: "auto", name: "Auto" });
+      list.push({ id: "auto", name: t("models.auto") });
     }
-    list.sort((a, b) => compareAz(a.name, b.name) || compareAz(a.id, b.id));
+    list.sort(
+      (a, b) =>
+        compareAz(a.name, b.name, locale) || compareAz(a.id, b.id, locale),
+    );
     return list;
-  }, [models]);
+  }, [models, locale, t]);
 
   const filtered = useMemo(() => {
     const q = String(query || "")
@@ -92,7 +98,7 @@ export default function ModelCombobox({
         aria-autocomplete="list"
         disabled={disabled}
         value={query}
-        placeholder={loading ? "Loading models…" : placeholder}
+        placeholder={loading ? t("models.loading") : resolvedPlaceholder}
         onFocus={() => setOpen(true)}
         onChange={(e) => {
           setQuery(e.target.value);
@@ -129,12 +135,12 @@ export default function ModelCombobox({
           className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-line bg-paper shadow-lg"
         >
           {loading ? (
-            <li className="px-3 py-2 text-sm text-muted">Loading…</li>
+            <li className="px-3 py-2 text-sm text-muted">{t("models.loadingShort")}</li>
           ) : filtered.length === 0 ? (
             <li className="px-3 py-2 text-sm text-muted">
               {normalized.length === 0
-                ? "No models loaded"
-                : "No matches — press blur to keep typed id"}
+                ? t("models.noneLoaded")
+                : t("models.noMatches")}
             </li>
           ) : (
             filtered.map((m) => (
@@ -142,7 +148,7 @@ export default function ModelCombobox({
                 <button
                   type="button"
                   className={[
-                    "flex w-full flex-col px-3 py-2 text-left text-sm hover:bg-fog",
+                    "flex w-full flex-col px-3 py-2 text-start text-sm hover:bg-fog",
                     m.id === value ? "bg-moss/20" : "",
                   ].join(" ")}
                   onMouseDown={(e) => e.preventDefault()}

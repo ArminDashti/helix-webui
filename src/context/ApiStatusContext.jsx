@@ -15,9 +15,7 @@ const STATUS_LOG_CAP = 50;
 
 function summarizeHealth(health) {
   if (!health) return "disconnected";
-  const services = [health.database, health.openrouter, health.cursor].filter(
-    Boolean,
-  );
+  const services = [health.database, health.llm].filter(Boolean);
   const anyIssue = services.some(
     (s) =>
       s.status &&
@@ -50,7 +48,6 @@ function snapshotServices(health, fetchError) {
       },
     };
   }
-  const providerKey = health.provider === "cursor" ? "cursor" : "openrouter";
   return {
     engine: {
       status: health.api?.status || "disconnected",
@@ -61,8 +58,8 @@ function snapshotServices(health, fetchError) {
       detail: health.database?.detail || "",
     },
     llm: {
-      status: health[providerKey]?.status || "disconnected",
-      detail: health[providerKey]?.detail || "",
+      status: health.llm?.status || "disconnected",
+      detail: health.llm?.detail || "",
     },
   };
 }

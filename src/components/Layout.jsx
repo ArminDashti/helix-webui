@@ -16,44 +16,31 @@ import {
   User,
 } from "lucide-react";
 import { useApiStatus } from "../context/ApiStatusContext.jsx";
+import { useI18n } from "../context/I18nContext.jsx";
 
 const THEME_STORAGE_KEY = "helix-theme";
 
-const MAIN_LINKS = [
-  { to: "/", label: "Analysis", icon: BarChart3, end: true },
-  { to: "/results", label: "Results", icon: Play },
-  { to: "/rules", label: "Rules", icon: Scale },
-  { to: "/skills", label: "Skills", icon: Sparkles },
-  { to: "/agents", label: "Agents", icon: Bot },
-  { to: "/docs", label: "Table docs", icon: Table2 },
-  { to: "/db-explorer", label: "DB Explorer", icon: Database },
-];
-
-const FOOTER_LINKS = [
-  { to: "/admin", label: "Admin", icon: Shield },
-  { to: "/settings", label: "Settings", icon: Settings },
-  { to: "/about-me", label: "About Me", icon: User },
-];
-
 const THEME_OPTIONS = [
-  { value: "light", label: "Light theme", icon: Sun },
-  { value: "dark", label: "Dark theme", icon: Moon },
-  { value: "system", label: "System theme", icon: Monitor },
+  { value: "light", labelKey: "layout.theme.light", icon: Sun },
+  { value: "dark", labelKey: "layout.theme.dark", icon: Moon },
+  { value: "system", labelKey: "layout.theme.system", icon: Monitor },
 ];
 
 function isConnectedStatus(status) {
   return status === "connected" || status === "configured";
 }
 
-function formatLinkStatus(status, checking) {
-  if (checking && !status) return "Checking…";
-  return isConnectedStatus(status) ? "Connected" : "Disconnected";
+function formatLinkStatus(status, checking, t) {
+  if (checking && !status) return t("layout.status.checking");
+  return isConnectedStatus(status)
+    ? t("layout.status.connected")
+    : t("layout.status.disconnected");
 }
 
-function StatusLine({ status, label, checking }) {
-  const state = formatLinkStatus(status, checking);
+function StatusLine({ status, label, checking, t }) {
+  const state = formatLinkStatus(status, checking, t);
   const connected = isConnectedStatus(status);
-  const title = `${label} ${state}`;
+  const title = t("layout.status.lineTitle", { label, state });
   return (
     <>
       <span className="text-start text-muted" title={title}>
@@ -117,7 +104,24 @@ function NavItem({ link }) {
 
 export default function Layout() {
   const { health, checking } = useApiStatus();
+  const { t, locale, setLocale } = useI18n();
   const [theme, setTheme] = useState(readThemePreference);
+
+  const mainLinks = [
+    { to: "/", label: t("nav.analysis"), icon: BarChart3, end: true },
+    { to: "/results", label: t("nav.results"), icon: Play },
+    { to: "/rules", label: t("nav.rules"), icon: Scale },
+    { to: "/skills", label: t("nav.skills"), icon: Sparkles },
+    { to: "/agents", label: t("nav.agents"), icon: Bot },
+    { to: "/docs", label: t("nav.tableDocs"), icon: Table2 },
+    { to: "/db-explorer", label: t("nav.dbExplorer"), icon: Database },
+  ];
+
+  const footerLinks = [
+    { to: "/admin", label: t("nav.admin"), icon: Shield },
+    { to: "/settings", label: t("nav.settings"), icon: Settings },
+    { to: "/about-me", label: t("nav.aboutMe"), icon: User },
+  ];
 
   useEffect(() => {
     applyTheme(theme);
@@ -138,24 +142,23 @@ export default function Layout() {
 
   const engineStatus = health?.api?.status;
   const dbStatus = health?.database?.status;
-  const providerKey = health?.provider === "cursor" ? "cursor" : "openrouter";
-  const llmStatus = health?.[providerKey]?.status;
+  const llmStatus = health?.llm?.status;
 
   return (
     <div className="flex h-dvh overflow-hidden">
       <nav
-        className="flex w-[20%] min-w-[10rem] max-w-[14rem] shrink-0 flex-col gap-1 border-r border-line/80 bg-paper/60 px-2 py-2 sm:px-3"
-        aria-label="Main"
+        className="flex w-[20%] min-w-[10rem] max-w-[14rem] shrink-0 flex-col gap-1 border-e border-line/80 bg-paper/60 px-2 py-2 sm:px-3"
+        aria-label={t("layout.navAria")}
       >
         <div className="mb-2 flex items-center gap-2 rounded-xl border border-line/80 bg-fog/30 px-2 py-2">
           <div
             className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line/70 bg-paper"
-            aria-label="App logo"
-            title="Helix logo"
+            aria-label={t("layout.logoAria")}
+            title={t("layout.logoTitle")}
           >
             <img
               src="/logo.svg"
-              alt="Helix"
+              alt={t("layout.logoAlt")}
               className="size-7 object-contain"
               width={28}
               height={28}
@@ -163,38 +166,45 @@ export default function Layout() {
           </div>
           <div className="min-w-0">
             <p className="truncate font-display text-sm font-semibold tracking-wide text-ink">
-              Helix
+              {t("layout.brand")}
             </p>
-            <p className="truncate text-[11px] text-muted">Analytics agents</p>
+            <p className="truncate text-[11px] text-muted">{t("layout.tagline")}</p>
           </div>
         </div>
 
-        {MAIN_LINKS.map((link) => (
+        {mainLinks.map((link) => (
           <NavItem key={link.to} link={link} />
         ))}
 
         <div className="mt-auto space-y-1 pt-2">
-          {FOOTER_LINKS.map((link) => (
+          {footerLinks.map((link) => (
             <NavItem key={link.to} link={link} />
           ))}
 
           <NavLink
             to="/settings?tab=status"
-            title="Open status logs"
-            className="block w-full rounded-xl border border-line/80 bg-fog/40 px-3 py-2 text-left text-[11px] font-medium hover:bg-fog"
-            aria-label="LLM, Engine, and Database status. Open status logs."
+            title={t("layout.status.openLogsTitle")}
+            className="block w-full rounded-xl border border-line/80 bg-fog/40 px-3 py-2 text-start text-[11px] font-medium hover:bg-fog"
+            aria-label={t("layout.status.openLogsAria")}
           >
             <span className="grid w-full grid-cols-[auto_1fr] items-baseline gap-x-2 gap-y-1 font-geek tracking-wide">
-              <StatusLine status={llmStatus} label="LLM" checking={checking} />
+              <StatusLine
+                status={llmStatus}
+                label={t("layout.status.llm")}
+                checking={checking}
+                t={t}
+              />
               <StatusLine
                 status={engineStatus}
-                label="Engine"
+                label={t("layout.status.engine")}
                 checking={checking}
+                t={t}
               />
               <StatusLine
                 status={dbStatus}
-                label="Database"
+                label={t("layout.status.database")}
                 checking={checking}
+                t={t}
               />
             </span>
           </NavLink>
@@ -202,25 +212,54 @@ export default function Layout() {
           <div
             className="flex flex-row gap-1 rounded-xl border border-line/80 bg-fog/40 p-1"
             role="group"
-            aria-label="Theme"
+            aria-label={t("layout.languageAria")}
+          >
+            {[
+              { value: "en", label: t("layout.languageEn") },
+              { value: "fa", label: t("layout.languageFa") },
+            ].map((opt) => {
+              const active = locale === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setLocale(opt.value)}
+                  title={opt.label}
+                  aria-label={opt.label}
+                  aria-pressed={active}
+                  className={[
+                    "flex flex-1 items-center justify-center rounded-lg py-1.5 text-xs font-semibold transition",
+                    "px-2",
+                    active ? "bg-moss text-white" : "text-ink hover:bg-fog",
+                  ].join(" ")}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div
+            className="flex flex-row gap-1 rounded-xl border border-line/80 bg-fog/40 p-1"
+            role="group"
+            aria-label={t("layout.themeAria")}
           >
             {THEME_OPTIONS.map((opt) => {
               const Icon = opt.icon;
               const active = theme === opt.value;
+              const label = t(opt.labelKey);
               return (
                 <button
                   key={opt.value}
                   type="button"
                   onClick={() => setTheme(opt.value)}
-                  title={opt.label}
-                  aria-label={opt.label}
+                  title={label}
+                  aria-label={label}
                   aria-pressed={active}
                   className={[
                     "flex flex-1 items-center justify-center rounded-lg py-1.5 transition",
                     "px-2",
-                    active
-                      ? "bg-moss text-white"
-                      : "text-ink hover:bg-fog",
+                    active ? "bg-moss text-white" : "text-ink hover:bg-fog",
                   ].join(" ")}
                 >
                   <Icon className="size-4" aria-hidden="true" />
@@ -229,7 +268,7 @@ export default function Layout() {
             })}
           </div>
           <p className="rounded-xl border border-line/80 bg-fog/40 px-2 py-1.5 text-center text-sm leading-snug text-muted">
-            Created by Armin and Cursor
+            {t("layout.credit")}
           </p>
         </div>
       </nav>

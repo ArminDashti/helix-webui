@@ -9,6 +9,8 @@ import AgentArrangeDesigner from "./AgentArrangeDesigner.jsx";
 import AgentGraphDesigner from "./AgentGraphDesigner.jsx";
 import FlashMessage from "./FlashMessage.jsx";
 import IconButton from "./IconButton.jsx";
+import { useI18n } from "../context/I18nContext.jsx";
+import { failMessage, translateKnownMessage } from "../i18n/apiErrors.js";
 import useFlash from "../lib/useFlash.js";
 import {
   cloneFlow,
@@ -19,6 +21,7 @@ import {
 } from "../pipeline/pipelineFlow.js";
 
 export default function PipelineDesigner({ agents, mode }) {
+  const { t } = useI18n();
   const [flow, setFlow] = useState(emptyStages());
   const [graph, setGraph] = useState({ entry: null, nodes: [], edges: [] });
   const [arrangeCompatible, setArrangeCompatible] = useState(true);
@@ -43,7 +46,11 @@ export default function PipelineDesigner({ agents, mode }) {
         if (!cancelled) applyBundle(bundle);
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load pipeline");
+          setError(
+            err instanceof Error
+              ? failMessage(err, t, "pipeline.loadFailed")
+              : t("pipeline.loadFailed"),
+          );
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -52,7 +59,7 @@ export default function PipelineDesigner({ agents, mode }) {
     return () => {
       cancelled = true;
     };
-  }, [applyBundle]);
+  }, [applyBundle, t]);
 
   function positionsFromGraph(g) {
     const map = {};
@@ -69,9 +76,9 @@ export default function PipelineDesigner({ agents, mode }) {
     try {
       const unstructured = !arrangeCompatible || !flow?.type;
       if (!unstructured) {
-        const errs = validateFlow(flow);
+        const errs = validateFlow(flow, t);
         if (errs.length) {
-          setError(errs[0]);
+          setError(translateKnownMessage(t, errs[0]) || errs[0]);
           setSaving(false);
           return;
         }
@@ -85,25 +92,33 @@ export default function PipelineDesigner({ agents, mode }) {
         const saved = await savePipelineBundle({ pipeline_graph: graph });
         applyBundle(saved);
       }
-      setStatus("Pipeline saved.");
+      setStatus(t("pipeline.saved"));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Save failed");
+      setError(
+        err instanceof Error
+          ? failMessage(err, t, "common.saveFailed")
+          : t("common.saveFailed"),
+      );
     } finally {
       setSaving(false);
     }
   }
 
   async function handleReset() {
-    if (!window.confirm("Reset to the default linear pipeline?")) return;
+    if (!window.confirm(t("pipeline.resetConfirm"))) return;
     setSaving(true);
     setError(null);
     setStatus(null);
     try {
       const saved = await resetPipelineBundle();
       applyBundle(saved);
-      setStatus("Pipeline reset to default.");
+      setStatus(t("pipeline.resetOk"));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Reset failed");
+      setError(
+        err instanceof Error
+          ? failMessage(err, t, "pipeline.resetFailed")
+          : t("pipeline.resetFailed"),
+      );
     } finally {
       setSaving(false);
     }
@@ -122,22 +137,25 @@ export default function PipelineDesigner({ agents, mode }) {
   function onGraphChange(updater) {
     setGraph((prev) => (typeof updater === "function" ? updater(prev) : updater));
     setArrangeCompatible(false);
-    setArrangeError("Arrange needs one IF per stage.");
+    setArrangeError(t("pipeline.arrangeNeedsIf"));
   }
 
   if (loading) {
-    return <p className="text-sm text-muted">Loading pipeline…</p>;
+    return <p className="text-sm text-muted">{t("pipeline.loading")}</p>;
   }
 
   const unstructured = !arrangeCompatible;
   const showArrange = mode === "arrange";
+  const arrangeHintError =
+    arrangeError != null
+      ? translateKnownMessage(t, arrangeError) || arrangeError
+      : t("pipeline.arrangeNeedsIf");
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
       {unstructured && showArrange ? (
         <p className="shrink-0 rounded-xl border border-warn-border bg-warn-bg px-4 py-2 text-sm text-warn">
-          {arrangeError || "Arrange needs one IF per stage."} Open Graph
-          to edit this pipeline, or reset to the default flow.
+          {t("pipeline.unstructuredHint", { error: arrangeHintError })}
         </p>
       ) : null}
       {error ? (
@@ -145,7 +163,9 @@ export default function PipelineDesigner({ agents, mode }) {
           {error}
         </p>
       ) : null}
-      <FlashMessage message={status} />
+      <FlashMessage
+        message={status ? translateKnownMessage(t, status) : status}
+      />
 
       <div className="flex shrink-0 justify-end gap-2">
         <IconButton
@@ -155,7 +175,7 @@ export default function PipelineDesigner({ agents, mode }) {
           disabled={saving}
           className="rounded-xl border border-line bg-fog px-4 py-2 text-sm font-medium hover:bg-fog/80 disabled:opacity-50"
         >
-          Reset default
+          {t("pipeline.resetDefault")}
         </IconButton>
         <IconButton
           type="button"
@@ -164,7 +184,7 @@ export default function PipelineDesigner({ agents, mode }) {
           disabled={saving || (showArrange && unstructured)}
           className="rounded-xl bg-moss px-4 py-2 text-sm font-semibold text-white hover:bg-moss-deep disabled:opacity-50"
         >
-          {saving ? "Saving…" : "Save"}
+          {saving ? t("common.saving") : t("common.save")}
         </IconButton>
       </div>
 
@@ -175,7 +195,12 @@ export default function PipelineDesigner({ agents, mode }) {
           onFlowChange={(next) => {
             setFlow(cloneFlow(next));
             try {
-              setGraph(compileFlow(next, mergeGraphPositions(graph, positionsFromGraph(graph))));
+              setGraph(
+                compileFlow(
+                  next,
+                  mergeGraphPositions(graph, positionsFromGraph(graph)),
+                ),
+              );
               setArrangeCompatible(true);
               setArrangeError(null);
             } catch {

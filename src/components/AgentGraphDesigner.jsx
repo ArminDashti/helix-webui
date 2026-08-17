@@ -13,6 +13,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { Plus } from "lucide-react";
+import { useI18n } from "../context/I18nContext.jsx";
 import IconButton from "./IconButton.jsx";
 import EdgeKindFields from "./EdgeKindFields.jsx";
 import {
@@ -42,16 +43,19 @@ function AgentNode({ data }) {
 }
 
 function BranchNode({ data }) {
+  const { t } = useI18n();
   return (
     <div
       className="flex h-24 w-24 rotate-45 items-center justify-center border border-moss bg-paper shadow-sm"
-      title="If / Else"
+      title={t("pipeline.ifElseTitle")}
     >
       <Handle type="target" position={Position.Top} className="!bg-moss -rotate-45" />
       <div className="-rotate-45 text-center">
-        <p className="text-xs font-semibold text-moss">If</p>
+        <p className="text-xs font-semibold text-moss">{t("pipeline.if")}</p>
         <p className="max-w-[4.5rem] truncate text-[10px] text-muted">
-          {data.when?.type || "when"}
+          {data.when?.type
+            ? t(`pipeline.when.${data.when.type}`)
+            : t("pipeline.whenFallback")}
         </p>
       </div>
       <Handle
@@ -71,19 +75,24 @@ function BranchNode({ data }) {
 }
 
 function LoopGroupNode({ data }) {
+  const { t } = useI18n();
+  const whenType = data.when?.type;
+  const cap = data.limit || data.max_visits;
+  const typeLabel = whenType
+    ? t(`pipeline.when.${whenType}`)
+    : t("pipeline.retryFallback");
   return (
     <div className="h-full rounded-2xl border-2 border-dashed border-moss/80 bg-moss/5 p-2">
       <p className="text-[11px] font-semibold uppercase tracking-wide text-moss">
-        Loop · {data.when?.type || "retry"}
-        {data.limit || data.max_visits ? ` ×${data.limit || data.max_visits}` : ""}
+        {t("pipeline.loop", { type: typeLabel })}
+        {cap ? ` ×${cap}` : ""}
       </p>
     </div>
   );
 }
-
 const nodeTypes = { agent: AgentNode, branch: BranchNode, loopGroup: LoopGroupNode };
 
-function graphToFlowNodes(graph, agentsById) {
+function graphToFlowNodes(graph, agentsById, t) {
   const nodes = (graph?.nodes || []).map((n) => ({
     id: n.id,
     type: "agent",
@@ -97,7 +106,7 @@ function graphToFlowNodes(graph, agentsById) {
     id: e.id,
     source: e.source,
     target: e.target,
-    label: edgeLabel(e),
+    label: edgeLabel(e, t),
     data: {
       when: { ...(e.when || { type: "always" }) },
       role: e.role,
@@ -119,17 +128,16 @@ function AgentGraphDesignerInner({
   onGraphChange,
   onPositionsChange,
 }) {
-  const agentsById = useMemo(() => {
-    const map = {};
+  const { t, locale } = useI18n();
+  const agentsById = useMemo(() => {    const map = {};
     for (const a of agents) map[a.id] = a;
     return map;
   }, [agents]);
 
   const agentsAz = useMemo(
-    () => sortByLabel(agents, (a) => agentCompanyLabel(a)),
-    [agents],
+    () => sortByLabel(agents, (a) => agentCompanyLabel(a), locale),
+    [agents, locale],
   );
-
   const positions = useMemo(() => {
     const map = {};
     for (const n of graph?.nodes || []) {
@@ -140,11 +148,10 @@ function AgentGraphDesignerInner({
 
   const display = useMemo(() => {
     if (!unstructured && flow) {
-      return flowToDisplayGraph(flow, agentsById, positions);
+      return flowToDisplayGraph(flow, agentsById, positions, t);
     }
-    return graphToFlowNodes(graph, agentsById);
-  }, [unstructured, flow, graph, agentsById, positions]);
-
+    return graphToFlowNodes(graph, agentsById, t);
+  }, [unstructured, flow, graph, agentsById, positions, t]);
   const [nodes, setNodes, onNodesChange] = useNodesState(display.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(display.edges);
   const [selectedEdgeId, setSelectedEdgeId] = useState(null);
@@ -302,7 +309,7 @@ function AgentGraphDesignerInner({
       <div className="flex min-h-0 flex-col gap-2">
         <div className="flex shrink-0 flex-wrap items-end gap-2">
           <label className="block text-sm">
-            <span className="font-medium text-ink">Add agent</span>
+            <span className="font-medium text-ink">{t("pipeline.addAgent")}</span>
             <select
               value={paletteId}
               onChange={(e) => setPaletteId(e.target.value)}
@@ -310,8 +317,9 @@ function AgentGraphDesignerInner({
             >
               {agentsAz.map((a) => (
                 <option key={a.id} value={a.id} disabled={usedIds.has(a.id)} title={a.id}>
-                  {agentCompanyLabel(a)}
-                  {usedIds.has(a.id) ? " (on flow)" : ""}
+                  {usedIds.has(a.id)
+                    ? t("pipeline.onFlow", { name: agentCompanyLabel(a) })
+                    : agentCompanyLabel(a)}
                 </option>
               ))}
             </select>
@@ -323,10 +331,10 @@ function AgentGraphDesignerInner({
             disabled={!paletteId || usedIds.has(paletteId)}
             className="rounded-xl border border-line bg-fog px-4 py-2 text-sm font-medium hover:bg-fog/80 disabled:opacity-50"
           >
-            Add to canvas
+            {t("pipeline.addToCanvas")}
           </IconButton>
         </div>
-        <div className="min-h-[22rem] flex-1 overflow-hidden rounded-2xl border border-line/80 bg-fog/20">
+        <div dir="ltr" className="min-h-[22rem] flex-1 overflow-hidden rounded-2xl border border-line/80 bg-fog/20">
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -358,18 +366,12 @@ function AgentGraphDesignerInner({
 
       <aside className="flex min-h-0 flex-col gap-3 overflow-y-auto rounded-2xl border border-line/80 bg-paper/80 p-3">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">
-          {unstructured ? "Edge condition" : "Selection"}
+          {unstructured ? t("pipeline.edgeCondition") : t("pipeline.selection")}
         </h3>
         {!unstructured ? (
-          <p className="text-sm text-muted">
-            Graph shows the same flow as Arrange. Edit IF / IF NOT / Go to in
-            Arrange (one IF per stage).
-          </p>
+          <p className="text-sm text-muted">{t("pipeline.graphMirrorsArrange")}</p>
         ) : !selectedEdge ? (
-          <p className="text-sm text-muted">
-            Select an edge to set when it is used. This graph cannot be shown as
-            Arrange until each stage has a single IF, IF NOT, or Go to.
-          </p>
+          <p className="text-sm text-muted">{t("pipeline.selectEdge")}</p>
         ) : (
           <div className="space-y-3 text-sm">
             <p className="font-mono text-xs text-muted">{selectedEdge.id}</p>
@@ -404,11 +406,13 @@ function AgentGraphDesignerInner({
             }}
             className="rounded-xl border border-line bg-fog px-3 py-1.5 text-xs font-medium hover:bg-fog/80"
           >
-            Delete edge
+            {t("pipeline.deleteEdge")}
           </IconButton>
         ) : null}
         {!unstructured && selectedNodeId ? (
-          <p className="text-xs text-muted">Selected: {selectedNodeId}</p>
+          <p className="text-xs text-muted">
+            {t("pipeline.selected", { id: selectedNodeId })}
+          </p>
         ) : null}
       </aside>
     </div>

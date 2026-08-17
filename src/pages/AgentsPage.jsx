@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Ban, Bot, LayoutList, ListTree, Network, Pencil, Plus, Trash2 } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Ban, Bot, LayoutList, ListChecks, ListTree, Network, Pencil, Plus, Trash2 } from "lucide-react";
 import {
   deleteAgent,
   fetchAgents,
@@ -13,19 +13,27 @@ import DataGrid from "../components/DataGrid.jsx";
 import FlashMessage from "../components/FlashMessage.jsx";
 import IconButton from "../components/IconButton.jsx";
 import PageHeader from "../components/PageHeader.jsx";
+import { useI18n } from "../context/I18nContext.jsx";
+import { failMessage, translateKnownMessage } from "../i18n/apiErrors.js";
 import useFlash from "../lib/useFlash.js";
 import StackedNames from "../components/StackedNames.jsx";
+import { sortByLabel } from "../utils/sortOptions.js";
 import { agentCompanyLabel } from "../utils/agentLabel.js";
 
-function namesForAgent(agentId, items) {
-  return items
-    .filter((item) => (item.agents || []).includes(agentId))
-    .map((item) => item.name || item.id)
-    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+function namesForAgent(agentId, items, locale) {
+  return sortByLabel(
+    items
+      .filter((item) => (item.agents || []).includes(agentId))
+      .map((item) => item.name || item.id),
+    (label) => label,
+    locale,
+  );
 }
 
 export default function AgentsPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { t, locale } = useI18n();
   const [agents, setAgents] = useState([]);
   const [rules, setRules] = useState([]);
   const [skills, setSkills] = useState([]);
@@ -50,12 +58,23 @@ export default function AgentsPage() {
       try {
         await reload();
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load agents");
+        setError(
+          err instanceof Error
+            ? failMessage(err, t, "agents.loadFailed")
+            : t("agents.loadFailed"),
+        );
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [t]);
+
+  useEffect(() => {
+    const flash = location.state?.status;
+    if (!flash) return;
+    setStatus(translateKnownMessage(t, flash) || flash);
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [location.pathname, location.state, navigate, setStatus, t]);
 
   const rows = useMemo(
     () => agents.map((agent) => ({ key: agent.id, item: agent })),
@@ -69,32 +88,42 @@ export default function AgentsPage() {
       setAgents((prev) =>
         prev.map((a) => (a.id === agent.id ? { ...a, ...updated } : a)),
       );
+      const label = agentCompanyLabel(updated);
       setStatus(
         updated.disabled
-          ? `Disabled ${agentCompanyLabel(updated)}`
-          : `Enabled ${agentCompanyLabel(updated)}`,
+          ? t("common.disabledNamed", { name: label })
+          : t("common.enabledNamed", { name: label }),
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Update failed");
+      setError(
+        err instanceof Error
+          ? failMessage(err, t, "common.updateFailed")
+          : t("common.updateFailed"),
+      );
     }
   }
 
   async function handleDelete(agent) {
-    if (!window.confirm(`Delete agent “${agentCompanyLabel(agent)}”?`)) return;
+    const label = agentCompanyLabel(agent);
+    if (!window.confirm(t("agents.deleteConfirm", { name: label }))) return;
     setError(null);
     try {
       await deleteAgent(agent.id);
       await reload();
-      setStatus("Agent deleted.");
+      setStatus(t("agents.deleted"));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete agent");
+      setError(
+        err instanceof Error
+          ? failMessage(err, t, "agents.deleteFailed")
+          : t("agents.deleteFailed"),
+      );
     }
   }
 
   const columns = [
     {
       key: "id",
-      label: "ID",
+      label: t("common.idUpper"),
       render: (agent) => (
         <span className="font-sans text-[13px]" title={agent.id}>
           {agent.id}
@@ -103,27 +132,47 @@ export default function AgentsPage() {
     },
     {
       key: "human_name",
-      label: "Human name",
-      render: (agent) => agent.human_name || "—",
+      label: t("agents.colHumanName"),
+      render: (agent) => agent.human_name || t("common.noneDash"),
     },
     {
       key: "name",
-      label: "Role",
+      label: t("agents.colRole"),
       render: (agent) => agent.name || agent.id,
     },
     {
       key: "rules",
-      label: "Rules",
-      render: (agent) => <StackedNames items={namesForAgent(agent.id, rules)} />,
+      label: t("agents.colRules"),
+      render: (agent) => (
+        <StackedNames items={namesForAgent(agent.id, rules, locale)} />
+      ),
     },
     {
       key: "skills",
-      label: "Skills",
-      render: (agent) => <StackedNames items={namesForAgent(agent.id, skills)} />,
+      label: t("agents.colSkills"),
+      render: (agent) => (
+        <StackedNames items={namesForAgent(agent.id, skills, locale)} />
+      ),
+    },
+    {
+      key: "assign",
+      label: t("agents.colAssign"),
+      render: (agent) => (
+        <IconButton
+          type="button"
+          icon={ListChecks}
+          onClick={() =>
+            navigate(`/agents/${encodeURIComponent(agent.id)}/assignments`)
+          }
+          className="rounded-lg border border-line bg-fog px-2 py-1.5 text-xs font-medium hover:bg-fog/80"
+        >
+          {t("agents.assign")}
+        </IconButton>
+      ),
     },
     {
       key: "edit",
-      label: "Edit",
+      label: t("common.edit"),
       render: (agent) => (
         <IconButton
           type="button"
@@ -131,13 +180,13 @@ export default function AgentsPage() {
           onClick={() => navigate(`/agents/${encodeURIComponent(agent.id)}`)}
           className="rounded-lg border border-line bg-fog px-2 py-1.5 text-xs font-medium hover:bg-fog/80"
         >
-          Edit
+          {t("common.edit")}
         </IconButton>
       ),
     },
     {
       key: "disable",
-      label: "Disable",
+      label: t("common.disable"),
       render: (agent) => (
         <IconButton
           type="button"
@@ -145,46 +194,46 @@ export default function AgentsPage() {
           onClick={() => handleDisable(agent)}
           className="rounded-lg border border-line bg-fog px-2 py-1.5 text-xs font-medium hover:bg-fog/80"
         >
-          {agent.disabled ? "Enable" : "Disable"}
+          {agent.disabled ? t("common.enable") : t("common.disable")}
         </IconButton>
       ),
     },
     {
       key: "delete",
-      label: "Delete",
+      label: t("common.delete"),
       render: (agent) => (
-          <IconButton
-            type="button"
-            icon={Trash2}
-            onClick={() => handleDelete(agent)}
-            className="rounded-lg border border-warn-border bg-warn-bg px-2 py-1.5 text-xs font-medium text-warn hover:opacity-90"
-          >
-            Delete
-          </IconButton>
-        ),
+        <IconButton
+          type="button"
+          icon={Trash2}
+          onClick={() => handleDelete(agent)}
+          className="rounded-lg border border-warn-border bg-warn-bg px-2 py-1.5 text-xs font-medium text-warn hover:opacity-90"
+        >
+          {t("common.delete")}
+        </IconButton>
+      ),
     },
   ];
 
   if (loading) {
-    return <p className="text-sm text-muted">Loading agents…</p>;
+    return <p className="text-sm text-muted">{t("agents.loading")}</p>;
   }
 
   return (
     <div className="hx-rise flex h-full min-h-0 flex-col gap-2">
       <PageHeader
         icon={Bot}
-        title="Agents"
+        title={t("agents.title")}
         actions={
           <>
             <div
               className="flex rounded-xl border border-line bg-fog/40 p-0.5"
               role="tablist"
-              aria-label="Agents view"
+              aria-label={t("agents.viewAria")}
             >
               {[
-                { id: "list", label: "List", icon: LayoutList },
-                { id: "arrange", label: "Arrange", icon: ListTree },
-                { id: "graph", label: "Graph", icon: Network },
+                { id: "list", label: t("agents.viewList"), icon: LayoutList },
+                { id: "arrange", label: t("agents.viewArrange"), icon: ListTree },
+                { id: "graph", label: t("agents.viewGraph"), icon: Network },
               ].map((tab) => (
                 <IconButton
                   key={tab.id}
@@ -210,7 +259,7 @@ export default function AgentsPage() {
                 className="inline-flex items-center gap-2 rounded-xl bg-moss px-4 py-2 text-sm font-semibold text-white hover:bg-moss-deep"
               >
                 <Plus className="size-4 shrink-0" aria-hidden="true" />
-                New agent
+                {t("agents.new")}
               </Link>
             ) : null}
           </>
@@ -223,7 +272,7 @@ export default function AgentsPage() {
       ) : null}
       {view === "list" ? <FlashMessage message={status} /> : null}
       {view === "list" ? (
-        <DataGrid columns={columns} rows={rows} emptyLabel="No agents" />
+        <DataGrid columns={columns} rows={rows} emptyLabel={t("common.noAgents")} />
       ) : null}
       <div
         className={

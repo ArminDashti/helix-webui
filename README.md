@@ -28,5 +28,5 @@ Optional: copy `.env.example` to `.env` and set `VITE_API_BASE_URL` for an absol
 | `/agents` | Agent list, Arrange stages (one IF per stage), Graph |
 | `/docs` | Table column docs (sql-description and description) |
 | `/results` | Analysis result history (show, export, delete) |
-| `/settings` | SQL Server + LLM provider, API keys, and models |
+| `/settings` | SQL Server + single LLM API (OpenRouter or OpenAI-compatible), base URL, API key, and models |
 | `/admin` | Redirects to `/settings` |

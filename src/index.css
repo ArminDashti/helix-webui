@@ -99,7 +99,8 @@ td {
   margin: 0.35rem 0;
 }
 .md-preview .md-ul {
-  margin: 0.35rem 0 0.35rem 1.25rem;
+  margin-block: 0.35rem;
+  margin-inline-start: 1.25rem;
   list-style: disc;
 }
 .md-preview .md-code {

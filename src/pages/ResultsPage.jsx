@@ -19,6 +19,9 @@ import {
 import DataGrid from "../components/DataGrid.jsx";
 import IconButton from "../components/IconButton.jsx";
 import PageHeader from "../components/PageHeader.jsx";
+import { useI18n } from "../context/I18nContext.jsx";
+import { failMessage } from "../i18n/apiErrors.js";
+import { formatDateTime } from "../i18n/format.js";
 import { hasPersianScript } from "../utils/textDirection.js";
 
 const DARK_CHART_DEFAULTS = {
@@ -68,11 +71,12 @@ function exportResultPdf({
   showText,
   showGrid,
   language,
+  labels,
 }) {
   const iframe = document.createElement("iframe");
   iframe.setAttribute(
     "style",
-    "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden",
+    "position:fixed;inset-inline-end:0;bottom:0;width:0;height:0;border:0;visibility:hidden",
   );
   document.body.appendChild(iframe);
 
@@ -80,7 +84,7 @@ function exportResultPdf({
   const doc = iframe.contentDocument;
   if (!win || !doc) {
     iframe.remove();
-    window.alert("Could not open print view for PDF export.");
+    window.alert(labels.pdfAlert);
     return;
   }
 
@@ -119,12 +123,13 @@ function exportResultPdf({
   }
 
   doc.open();
-  doc.write(`<!DOCTYPE html><html lang="${lang}" dir="${dir}"><head><title>Helix export</title>
+  doc.write(`<!DOCTYPE html><html lang="${lang}" dir="${dir}"><head><title>${escapeHtml(labels.pdfTitle)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600&display=swap" rel="stylesheet" />
 <style>
   body { font-family: Vazirmatn, system-ui, sans-serif; color: #111; background: #fff; margin: 24px; }
-  h1 { font-size: 20px; margin: 0 0 8px; }
+  .report-title { direction: ltr; text-align: left; font-size: 20px; margin: 0 0 8px; }
+  .report-footer { direction: ltr; text-align: center; margin-top: 32px; font-size: 12px; color: #555; }
   .meta { color: #555; font-size: 13px; margin-bottom: 20px; white-space: pre-wrap; }
   img { max-width: 100%; height: auto; border: 1px solid #ccc; border-radius: 12px; }
   article { margin-top: 20px; padding: 16px; border: 1px solid #ccc; border-radius: 12px;
@@ -134,11 +139,12 @@ function exportResultPdf({
   th { background: #f0f0f0; }
   @media print { body { margin: 12px; } }
 </style></head><body>
-  <h1>Helix report</h1>
+  <h1 class="report-title">${escapeHtml(labels.pdfHeading)}</h1>
   <div class="meta">${safePrompt}</div>
-  ${chartImg ? `<img src="${chartImg}" alt="Chart" />` : ""}
+  ${chartImg ? `<img src="${chartImg}" alt="${escapeHtml(labels.pdfChartAlt)}" />` : ""}
   ${showText ? `<article dir="${dir}">${safeReport}</article>` : ""}
   ${gridHtml}
+  <footer class="report-footer">${escapeHtml(labels.pdfFooter)}</footer>
   <script>
     window.onload = function () {
       setTimeout(function () {
@@ -163,19 +169,23 @@ function normalizeMode(mode) {
   return mode || "auto";
 }
 
-function formatWhen(iso) {
-  if (!iso) return "";
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}:${pad(date.getMonth() + 1)}:${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
-}
-
 function ResultsList() {
   const navigate = useNavigate();
+  const { t, locale } = useI18n();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  const pdfLabels = useMemo(
+    () => ({
+      pdfAlert: t("results.pdfAlert"),
+      pdfTitle: t("results.pdfTitle"),
+      pdfHeading: t("results.pdfHeading"),
+      pdfChartAlt: t("results.pdfChartAlt"),
+      pdfFooter: t("results.pdfFooter"),
+    }),
+    [t],
+  );
 
   async function load() {
     const data = await fetchResults();
@@ -187,12 +197,12 @@ function ResultsList() {
       try {
         await load();
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load results");
+        setError(failMessage(err, t, "results.loadFailed"));
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [t]);
 
   async function handleExport(item) {
     setError(null);
@@ -200,7 +210,7 @@ function ResultsList() {
       const record = await fetchResult(item.id);
       const result = record?.payload;
       if (!result) {
-        setError("Result has no payload to export.");
+        setError(t("results.noPayload"));
         return;
       }
       const showChart = Boolean(result.echarts_option);
@@ -215,20 +225,21 @@ function ResultsList() {
         showText,
         showGrid,
         language: result.language || record.language || "en",
+        labels: pdfLabels,
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to export result");
+      setError(failMessage(err, t, "results.exportFailed"));
     }
   }
 
   async function handleDelete(item) {
-    if (!window.confirm("Delete this result?")) return;
+    if (!window.confirm(t("results.deleteConfirm"))) return;
     setError(null);
     try {
       await deleteResult(item.id);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete result");
+      setError(failMessage(err, t, "results.deleteFailed"));
     }
   }
 
@@ -237,99 +248,112 @@ function ResultsList() {
     [items],
   );
 
-  const columns = [
-    {
-      key: "title",
-      label: "Title",
-      render: (item) => item.prompt || "(no prompt)",
-    },
-    {
-      key: "mode",
-      label: "Mode",
-      render: (item) => item.mode || "—",
-    },
-    {
-      key: "datetime",
-      label: "DateTime",
-      render: (item) => (
-        <span className="whitespace-nowrap font-sans text-[13px]">
-          {formatWhen(item.created_at)}
-        </span>
-      ),
-    },
-    {
-      key: "show",
-      label: "Show",
-      render: (item) => (
-        <IconButton
-          type="button"
-          icon={Eye}
-          onClick={() => navigate(`/results/${item.id}`)}
-          className="rounded-lg border border-line bg-fog px-2 py-1.5 text-xs font-medium hover:bg-fog/80"
-        >
-          Show
-        </IconButton>
-      ),
-    },
-    {
-      key: "export",
-      label: "Export",
-      render: (item) => (
-        <IconButton
-          type="button"
-          icon={FileDown}
-          onClick={() => handleExport(item)}
-          className="rounded-lg border border-line bg-fog px-2 py-1.5 text-xs font-medium hover:bg-fog/80"
-        >
-          Export
-        </IconButton>
-      ),
-    },
-    {
-      key: "delete",
-      label: "Delete",
-      render: (item) => (
-        <IconButton
-          type="button"
-          icon={Trash2}
-          onClick={() => handleDelete(item)}
-          className="rounded-lg border border-warn-border bg-warn-bg px-2 py-1.5 text-xs font-medium text-warn hover:opacity-90"
-        >
-          Delete
-        </IconButton>
-      ),
-    },
-  ];
+  const columns = useMemo(
+    () => [
+      {
+        key: "title",
+        label: t("results.colTitle"),
+        render: (item) => item.prompt || t("results.noPrompt"),
+      },
+      {
+        key: "mode",
+        label: t("results.colMode"),
+        render: (item) => item.mode || t("common.noneDash"),
+      },
+      {
+        key: "datetime",
+        label: t("results.colDatetime"),
+        render: (item) => (
+          <span className="whitespace-nowrap font-sans text-[13px]">
+            {formatDateTime(item.created_at, locale)}
+          </span>
+        ),
+      },
+      {
+        key: "show",
+        label: t("results.colShow"),
+        render: (item) => (
+          <IconButton
+            type="button"
+            icon={Eye}
+            onClick={() => navigate(`/results/${item.id}`)}
+            className="rounded-lg border border-line bg-fog px-2 py-1.5 text-xs font-medium hover:bg-fog/80"
+          >
+            {t("results.show")}
+          </IconButton>
+        ),
+      },
+      {
+        key: "export",
+        label: t("results.colExport"),
+        render: (item) => (
+          <IconButton
+            type="button"
+            icon={FileDown}
+            onClick={() => handleExport(item)}
+            className="rounded-lg border border-line bg-fog px-2 py-1.5 text-xs font-medium hover:bg-fog/80"
+          >
+            {t("results.export")}
+          </IconButton>
+        ),
+      },
+      {
+        key: "delete",
+        label: t("results.colDelete"),
+        render: (item) => (
+          <IconButton
+            type="button"
+            icon={Trash2}
+            onClick={() => handleDelete(item)}
+            className="rounded-lg border border-warn-border bg-warn-bg px-2 py-1.5 text-xs font-medium text-warn hover:opacity-90"
+          >
+            {t("results.delete")}
+          </IconButton>
+        ),
+      },
+    ],
+    [t, locale, navigate],
+  );
 
   if (loading) {
-    return <p className="text-sm text-muted">Loading results…</p>;
+    return <p className="text-sm text-muted">{t("results.loadingList")}</p>;
   }
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
-      <PageHeader icon={Play} title="Results">
-        <p className="mt-0.5 text-sm text-muted">
-          History of analysis runs.
-        </p>
+      <PageHeader icon={Play} title={t("results.title")}>
+        <p className="mt-0.5 text-sm text-muted">{t("results.subtitle")}</p>
       </PageHeader>
       {error ? (
         <p className="rounded-xl border border-warn-border bg-warn-bg px-4 py-2 text-sm text-warn">
           {error}
         </p>
       ) : null}
-      <DataGrid columns={columns} rows={rows} emptyLabel="No results yet. Run an analysis to add one." />
+      <DataGrid columns={columns} rows={rows} emptyLabel={t("results.empty")} />
     </div>
   );
 }
 
 function ResultDetail({ resultId }) {
   const chartRef = useRef(null);
+  const { t } = useI18n();
   const [record, setRecord] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [editing, setEditing] = useState(false);
   const [editedPrompt, setEditedPrompt] = useState("");
   const [editedReport, setEditedReport] = useState("");
+
+  const pdfLabels = useMemo(
+    () => ({
+      pdfAlert: t("results.pdfAlert"),
+      pdfTitle: t("results.pdfTitle"),
+      pdfHeading: t("results.pdfHeading"),
+      pdfChartAlt: t("results.pdfChartAlt"),
+      pdfFooter: t("results.pdfFooter"),
+    }),
+    [t],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -346,7 +370,7 @@ function ResultDetail({ resultId }) {
       } catch (err) {
         if (!cancelled) {
           setRecord(null);
-          setError(err instanceof Error ? err.message : "Failed to load result");
+          setError(failMessage(err, t, "results.loadOneFailed"));
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -355,7 +379,7 @@ function ResultDetail({ resultId }) {
     return () => {
       cancelled = true;
     };
-  }, [resultId]);
+  }, [resultId, t]);
 
   const result = record?.payload;
   const mode = record?.mode;
@@ -388,22 +412,25 @@ function ResultDetail({ resultId }) {
   const reportLang = reportDir === "rtl" ? "fa" : "en";
 
   if (loading) {
-    return <p className="text-sm text-muted">Loading result…</p>;
+    return <p className="text-sm text-muted">{t("results.loadingDetail")}</p>;
   }
 
   if (error || !record || !result) {
     return (
       <div className="space-y-3">
-        <PageHeader icon={Play} title="Results" backTo="/results" />
+        <PageHeader icon={Play} title={t("results.title")} backTo="/results" />
         <p className="rounded-xl border border-warn-border bg-warn-bg px-4 py-2 text-sm text-warn">
-          {error || "Result not found."}
+          {error || t("results.notFound")}
         </p>
         <Link
           to="/results"
           className="inline-flex items-center gap-2 rounded-xl border border-line bg-paper px-4 py-2 text-sm font-medium text-ink hover:bg-fog"
         >
-          <ArrowLeft className="size-4 shrink-0" aria-hidden="true" />
-          Back to results
+          <ArrowLeft
+            className="size-4 shrink-0 rtl:rotate-180"
+            aria-hidden="true"
+          />
+          {t("results.backToList")}
         </Link>
       </div>
     );
@@ -413,7 +440,7 @@ function ResultDetail({ resultId }) {
     <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto">
       <PageHeader
         icon={Play}
-        title="Results"
+        title={t("results.title")}
         backTo="/results"
         actions={
           <>
@@ -424,7 +451,7 @@ function ResultDetail({ resultId }) {
               onClick={() => setEditing((v) => !v)}
               className="rounded-xl border border-line bg-paper px-4 py-2 text-sm font-medium text-ink hover:bg-fog"
             >
-              {editing ? "Done" : "Edit"}
+              {editing ? t("results.done") : t("results.edit")}
             </IconButton>
           ) : null}
           {showChart || showText || showGrid ? (
@@ -441,11 +468,12 @@ function ResultDetail({ resultId }) {
                   showText,
                   showGrid,
                   language,
+                  labels: pdfLabels,
                 })
               }
               className="rounded-xl border border-line bg-paper px-4 py-2 text-sm font-medium text-ink hover:bg-fog"
             >
-              Export PDF
+              {t("results.exportPdf")}
             </IconButton>
           ) : null}
           <Link
@@ -453,14 +481,14 @@ function ResultDetail({ resultId }) {
             className="inline-flex items-center gap-2 rounded-xl border border-line bg-paper px-4 py-2 text-sm font-medium text-ink hover:bg-fog"
           >
             <History className="size-4 shrink-0" aria-hidden="true" />
-            History
+            {t("results.history")}
           </Link>
           <Link
             to="/"
             className="inline-flex items-center gap-2 rounded-xl border border-line bg-paper px-4 py-2 text-sm font-medium text-ink hover:bg-fog"
           >
             <Plus className="size-4 shrink-0" aria-hidden="true" />
-            New prompt
+            {t("results.newPrompt")}
           </Link>
           </>
         }
@@ -483,15 +511,17 @@ function ResultDetail({ resultId }) {
         {showChart ? (
           <div className="overflow-hidden rounded-2xl border border-line bg-paper/80 p-3 sm:p-4">
             <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted">
-              Chart
+              {t("results.sectionChart")}
             </h2>
-            <ReactECharts
-              ref={chartRef}
-              option={chartOption}
-              style={{ height: 360, width: "100%" }}
-              notMerge
-              lazyUpdate
-            />
+            <div dir="ltr">
+              <ReactECharts
+                ref={chartRef}
+                option={chartOption}
+                style={{ height: 360, width: "100%" }}
+                notMerge
+                lazyUpdate
+              />
+            </div>
           </div>
         ) : null}
 
@@ -502,7 +532,7 @@ function ResultDetail({ resultId }) {
             lang={reportLang}
           >
             <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted">
-              Report
+              {t("results.sectionReport")}
             </h2>
             {editing ? (
               <textarea
@@ -526,7 +556,7 @@ function ResultDetail({ resultId }) {
             lang={language === "fa" ? "fa" : "en"}
           >
             <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted">
-              Grid
+              {t("results.sectionGrid")}
             </h2>
             <table className="w-full min-w-[20rem] border-collapse font-sans text-sm">
               <thead>
@@ -561,7 +591,7 @@ function ResultDetail({ resultId }) {
 
         {!showChart && !showText && !showGrid ? (
           <p className="rounded-xl border border-line bg-paper/80 px-4 py-3 text-sm text-muted">
-            No chart, report, or grid was returned for this run.
+            {t("results.emptyPayload")}
           </p>
         ) : null}
       </section>

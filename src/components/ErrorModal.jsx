@@ -1,16 +1,23 @@
 import { X } from "lucide-react";
 import IconButton from "./IconButton.jsx";
+import { useI18n } from "../context/I18nContext.jsx";
+import { translateApiError } from "../i18n/apiErrors.js";
 
 /**
  * Modal for varied API failures (network, HTTP, parse, stream).
  */
 export default function ErrorModal({ error, onDismiss }) {
+  const { t } = useI18n();
   if (!error) return null;
 
-  const title = error.title || "Error";
-  const message = error.message || "Something went wrong.";
-  const detail = error.detail || "";
-  const meta = [error.kind, error.status != null ? `HTTP ${error.status}` : null]
+  const localized = translateApiError(t, error);
+  const title = localized.title || t("errors.title");
+  const message = localized.message || t("errors.generic");
+  const detail = localized.detail || "";
+  const meta = [
+    localized.kind,
+    error.status != null ? t("errors.httpMeta", { status: error.status }) : null,
+  ]
     .filter(Boolean)
     .join(" · ");
 
@@ -37,7 +44,9 @@ export default function ErrorModal({ error, onDismiss }) {
             </p>
           ) : null}
           {error.path ? (
-            <p className="text-xs text-muted">Path: {error.path}</p>
+            <p className="text-xs text-muted">
+              {t("errors.path", { path: error.path })}
+            </p>
           ) : null}
         </div>
 
@@ -48,7 +57,7 @@ export default function ErrorModal({ error, onDismiss }) {
             onClick={onDismiss}
             className="rounded-xl border border-line bg-fog px-4 py-2 text-sm font-medium text-ink hover:bg-fog/80"
           >
-            Close
+            {t("common.close")}
           </IconButton>
         </footer>
       </div>
