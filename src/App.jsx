@@ -16,6 +16,7 @@ import NewAgentPage from "./pages/NewAgentPage.jsx";
 import NewRulePage from "./pages/NewRulePage.jsx";
 import NewSkillPage from "./pages/NewSkillPage.jsx";
 import ResultsPage from "./pages/ResultsPage.jsx";
+import LogsPage from "./pages/LogsPage.jsx";
 import RulesPage from "./pages/RulesPage.jsx";
 import SettingsPage from "./pages/SettingsPage.jsx";
 import SkillsPage from "./pages/SkillsPage.jsx";
@@ -30,6 +31,8 @@ export default function App() {
             <Route index element={<AnalysisPage />} />
             <Route path="results" element={<ResultsPage />} />
             <Route path="results/:resultId" element={<ResultsPage />} />
+            <Route path="logs" element={<LogsPage />} />
+            <Route path="logs/:logId" element={<LogsPage />} />
             <Route path="run" element={<Navigate to="/" replace />} />
             <Route path="rules" element={<RulesPage />} />
             <Route path="rules/new" element={<NewRulePage />} />

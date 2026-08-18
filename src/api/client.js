@@ -502,6 +502,23 @@ export async function deleteResult(resultId) {
   }
 }
 
+export async function fetchLogs() {
+  const data = await requestJson("/api/logs/");
+  return data.logs || [];
+}
+
+export async function fetchLog(logId) {
+  return requestJson(`/api/logs/${encodeURIComponent(logId)}/`);
+}
+
+export async function deleteLog(logId) {
+  const path = `/api/logs/${encodeURIComponent(logId)}/`;
+  const res = await apiFetch(path, { method: "DELETE" });
+  if (!res.ok && res.status !== 204) {
+    await parseJson(res, path);
+  }
+}
+
 export async function fetchDbExplorerTables() {
   return requestJson("/api/db-explorer/tables/");
 }

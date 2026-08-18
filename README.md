@@ -23,6 +23,7 @@ Optional: copy `.env.example` to `.env` and set `VITE_API_BASE_URL` for an absol
 |-------|---------|
 | `/` | Analysis — prompt + mode, Run |
 | `/results` | Analysis result history (show, export, delete) |
+| `/logs` | Failure and error history (show, delete) |
 | `/rules` | Rules list and editor |
 | `/skills` | Skills list and editor |
 | `/agents` | Agent list, Arrange stages (one IF per stage), Graph |

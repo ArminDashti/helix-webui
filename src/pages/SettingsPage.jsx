@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Navigate, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useSearchParams } from "react-router-dom";
 import {
   Activity,
   Database,
@@ -149,6 +149,11 @@ function StatusLogsSection() {
             {t("settings.tabStatus")}
           </h2>
           <p className="mt-1 text-sm text-muted">{t("settings.statusIntro")}</p>
+          <p className="mt-1 text-sm text-muted">
+            <Link to="/logs" className="underline decoration-line underline-offset-2 hover:text-ink">
+              {t("settings.statusLogsLink")}
+            </Link>
+          </p>
         </div>
         <IconButton
           type="button"

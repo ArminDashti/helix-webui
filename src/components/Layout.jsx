@@ -8,6 +8,7 @@ import {
   Moon,
   Play,
   Scale,
+  ScrollText,
   Settings,
   Shield,
   Sparkles,
@@ -110,6 +111,7 @@ export default function Layout() {
   const mainLinks = [
     { to: "/", label: t("nav.analysis"), icon: BarChart3, end: true },
     { to: "/results", label: t("nav.results"), icon: Play },
+    { to: "/logs", label: t("nav.logs"), icon: ScrollText },
     { to: "/rules", label: t("nav.rules"), icon: Scale },
     { to: "/skills", label: t("nav.skills"), icon: Sparkles },
     { to: "/agents", label: t("nav.agents"), icon: Bot },
