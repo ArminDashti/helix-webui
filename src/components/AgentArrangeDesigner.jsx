@@ -26,10 +26,10 @@ export default function AgentArrangeDesigner({ agents, flow, onFlowChange }) {
     const last = children[children.length - 1];
     const startId =
       last?.next_agent_id || last?.agent_id || agents[0]?.id || "";
-    const unused = agents.find(
-      (a) => a.id !== startId && !children.some((s) => s.agent_id === a.id),
+    const fallback = agents.find((a) => a.id !== startId);
+    onFlowChange(
+      insertStage(flow, children.length, newStage(startId, fallback?.id || "")),
     );
-    onFlowChange(insertStage(flow, children.length, newStage(startId, unused?.id || "")));
   }
 
   return (

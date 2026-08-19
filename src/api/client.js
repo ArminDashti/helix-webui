@@ -39,7 +39,10 @@ export class ApiError extends Error {
 
 function apiUrl(path) {
   const p = path.startsWith("/") ? path : `/${path}`;
-  return API_BASE ? `${API_BASE}${p}` : p;
+  if (API_BASE) return `${API_BASE}${p}`;
+  const base = (import.meta.env.BASE_URL || "/").replace(/\/$/, "");
+  if (!base || base === "/") return p;
+  return `${base}${p}`;
 }
 
 function httpTitle(status) {
@@ -91,11 +94,14 @@ async function parseJson(response, path, { silent = false } = {}) {
       trimmed.startsWith("<HTML") ||
       /<head>[\s\S]*<title>\s*404/i.test(trimmed);
     if (looksLikeHtml) {
+      const serverError = response.status >= 500;
       const apiErr = new ApiError({
         kind: "parse",
         status: response.status,
-        title: "API misconfigured",
-        message: "Got HTML instead of JSON — check the API proxy or base URL.",
+        title: serverError ? "Server error" : "API misconfigured",
+        message: serverError
+          ? "The API timed out or crashed — try again or check helix-api logs."
+          : "Got HTML instead of JSON — check the API proxy or base URL.",
         detail: `HTTP ${response.status}`,
         path,
       });
@@ -147,12 +153,11 @@ export async function createAgent({
   id,
   name,
   description = "",
-  human_name = "",
 }) {
   return requestJson("/api/agents/", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id, name, description, human_name }),
+    body: JSON.stringify({ id, name, description }),
   });
 }
 

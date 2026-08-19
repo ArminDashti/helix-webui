@@ -23,6 +23,9 @@ import { useI18n } from "../context/I18nContext.jsx";
 import { failMessage } from "../i18n/apiErrors.js";
 import { formatDateTime } from "../i18n/format.js";
 import { hasPersianScript } from "../utils/textDirection.js";
+import { assetUrl } from "../utils/assetUrl.js";
+import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
 
 const DARK_CHART_DEFAULTS = {
   backgroundColor: "transparent",
@@ -62,7 +65,24 @@ function resolveDir(language, text) {
   return hasPersianScript(text) ? "rtl" : "ltr";
 }
 
-function exportResultPdf({
+async function loadLogoDataUrl(url) {
+  if (!url) return "";
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return "";
+    const blob = await response.blob();
+    return await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(typeof reader.result === "string" ? reader.result : "");
+      reader.onerror = () => resolve("");
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return "";
+  }
+}
+
+async function exportResultPdf({
   prompt,
   chartInstance,
   textReport,
@@ -72,29 +92,17 @@ function exportResultPdf({
   showGrid,
   language,
   labels,
+  logoUrl,
+  locale,
 }) {
-  const iframe = document.createElement("iframe");
-  iframe.setAttribute(
-    "style",
-    "position:fixed;inset-inline-end:0;bottom:0;width:0;height:0;border:0;visibility:hidden",
-  );
-  document.body.appendChild(iframe);
-
-  const win = iframe.contentWindow;
-  const doc = iframe.contentDocument;
-  if (!win || !doc) {
-    iframe.remove();
-    window.alert(labels.pdfAlert);
-    return;
-  }
-
   let chartImg = "";
   if (showChart && chartInstance) {
     try {
       chartImg = chartInstance.getDataURL({
         type: "png",
         pixelRatio: 2,
-        backgroundColor: "#ffffff",
+        // Light branded background for readable charts on paper.
+        backgroundColor: "#fafcfb",
       });
     } catch {
       chartImg = "";
@@ -105,62 +113,169 @@ function exportResultPdf({
   const lang = dir === "rtl" ? "fa" : "en";
   const safePrompt = escapeHtml(prompt);
   const safeReport = escapeHtml(textReport);
+  const exportedAt = formatDateTime(new Date(), locale || "en");
 
-  let gridHtml = "";
+  const logoDataUrl = await loadLogoDataUrl(logoUrl);
+  const safeLogoUrl = escapeHtml(logoDataUrl);
+
+  // Ensure Vazirmatn is loaded so html2canvas captures correct glyphs.
+  try {
+    const id = "helix-pdf-vazirmatn";
+    if (!document.getElementById(id)) {
+      const link = document.createElement("link");
+      link.id = id;
+      link.rel = "stylesheet";
+      link.href =
+        "https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600&display=swap";
+      document.head.appendChild(link);
+    }
+    await (document.fonts?.ready || Promise.resolve());
+    await new Promise((r) => setTimeout(r, 300));
+  } catch {
+    // Font load is best-effort; export still works with fallback fonts.
+  }
+
+  const element = document.createElement("div");
+  element.style.position = "absolute";
+  element.style.left = "-9999px";
+  element.style.top = "0";
+  element.style.width = "794px"; // ~A4 width at 96dpi
+  element.style.background = "#ffffff";
+  element.setAttribute("dir", dir);
+  element.setAttribute("lang", lang);
+  document.body.appendChild(element);
+
+  const S = {
+    root: `font-family:Vazirmatn,system-ui,sans-serif;color:#111;background:#fff;padding:16px;box-sizing:border-box;`,
+    header: `display:flex;align-items:center;justify-content:center;gap:12px;margin:0 0 14px 0;padding:12px 14px;border-radius:14px;background:#3d9b82;color:#fff;`,
+    logo: `height:44px;width:auto;object-fit:contain;`,
+    title: `direction:ltr;text-align:center;font-size:22px;font-weight:600;margin:0;color:#fff;`,
+    meta: `margin:0 0 14px 0;padding:12px 14px;border-radius:14px;background:#eef7f4;color:#0f3b2f;font-size:13px;font-weight:600;white-space:pre-wrap;line-height:1.4;`,
+    chartWrap: `margin-bottom:14px;`,
+    chart: `max-width:100%;height:auto;border:1px solid #3d9b82;border-radius:14px;display:block;`,
+    article: `margin-bottom:14px;padding:14px 16px;border:2px solid #3d9b82;border-radius:14px;background:#f6fbf9;white-space:pre-wrap;line-height:1.6;font-size:14px;`,
+    table: `width:100%;border-collapse:collapse;margin-top:14px;font-size:13px;`,
+    th: `border:1px solid #cfe6dd;padding:8px 10px;text-align:start;background:#3d9b82;color:#fff;font-weight:600;`,
+    td: `border:1px solid #cfe6dd;padding:8px 10px;text-align:start;`,
+    tdEven: `border:1px solid #cfe6dd;padding:8px 10px;text-align:start;background:#eef7f4;`,
+  };
+
+  const logoImgInline = safeLogoUrl
+    ? `<img style="${S.logo}" src="${safeLogoUrl}" alt="${escapeHtml(labels.pdfLogoAlt)}" />`
+    : "";
+  const chartImgInline = chartImg
+    ? `<div style="${S.chartWrap}"><img style="${S.chart}" src="${chartImg}" alt="${escapeHtml(labels.pdfChartAlt)}" /></div>`
+    : "";
+  const articleInline = showText
+    ? `<div style="${S.article}" dir="${dir}">${safeReport}</div>`
+    : "";
+
+  let gridInline = "";
   if (showGrid && grid?.columns?.length) {
     const cols = grid.columns;
     const rows = grid.rows || [];
-    gridHtml = `<table><thead><tr>${cols
-      .map((c) => `<th>${escapeHtml(c)}</th>`)
-      .join("")}</tr></thead><tbody>${rows
+    const headerCells = cols.map((c) => `<th style="${S.th}">${escapeHtml(c)}</th>`).join("");
+    const bodyRows = rows
       .map(
-        (row) =>
+        (row, i) =>
           `<tr>${cols
-            .map((c) => `<td>${escapeHtml(row?.[c])}</td>`)
+            .map((c) => `<td style="${i % 2 === 1 ? S.tdEven : S.td}">${escapeHtml(row?.[c])}</td>`)
             .join("")}</tr>`,
       )
-      .join("")}</tbody></table>`;
+      .join("");
+    gridInline = `<table style="${S.table}"><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table>`;
   }
 
-  doc.open();
-  doc.write(`<!DOCTYPE html><html lang="${lang}" dir="${dir}"><head><title>${escapeHtml(labels.pdfTitle)}</title>
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600&display=swap" rel="stylesheet" />
-<style>
-  body { font-family: Vazirmatn, system-ui, sans-serif; color: #111; background: #fff; margin: 24px; }
-  .report-title { direction: ltr; text-align: left; font-size: 20px; margin: 0 0 8px; }
-  .report-footer { direction: ltr; text-align: center; margin-top: 32px; font-size: 12px; color: #555; }
-  .meta { color: #555; font-size: 13px; margin-bottom: 20px; white-space: pre-wrap; }
-  img { max-width: 100%; height: auto; border: 1px solid #ccc; border-radius: 12px; }
-  article { margin-top: 20px; padding: 16px; border: 1px solid #ccc; border-radius: 12px;
-    background: #f7f7f7; white-space: pre-wrap; line-height: 1.5; font-size: 14px; }
-  table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 13px; font-family: Vazirmatn, system-ui, sans-serif; }
-  th, td { border: 1px solid #ccc; padding: 8px 10px; text-align: start; font-family: Vazirmatn, system-ui, sans-serif; }
-  th { background: #f0f0f0; }
-  @media print { body { margin: 12px; } }
-</style></head><body>
-  <h1 class="report-title">${escapeHtml(labels.pdfHeading)}</h1>
-  <div class="meta">${safePrompt}</div>
-  ${chartImg ? `<img src="${chartImg}" alt="${escapeHtml(labels.pdfChartAlt)}" />` : ""}
-  ${showText ? `<article dir="${dir}">${safeReport}</article>` : ""}
-  ${gridHtml}
-  <footer class="report-footer">${escapeHtml(labels.pdfFooter)}</footer>
-  <script>
-    window.onload = function () {
-      setTimeout(function () {
-        window.focus();
-        window.print();
-      }, 50);
-    };
-  </script>
-</body></html>`);
-  doc.close();
+  element.innerHTML = `
+    <div style="${S.root}">
+      <div style="${S.header}">
+        ${logoImgInline}
+        <h1 style="${S.title}">${escapeHtml(labels.pdfHeading)}</h1>
+      </div>
+      <div style="${S.meta}">${safePrompt}</div>
+      ${chartImgInline}
+      ${articleInline}
+      ${gridInline}
+    </div>
+  `;
 
-  const cleanup = () => {
-    setTimeout(() => iframe.remove(), 1000);
-  };
-  win.addEventListener("afterprint", cleanup);
-  setTimeout(cleanup, 60_000);
+  try {
+    // Give browser one frame to paint the element before capturing.
+    await new Promise((r) => requestAnimationFrame(r));
+    await new Promise((r) => requestAnimationFrame(r));
+
+    const canvas = await html2canvas(element, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: "#ffffff",
+      logging: false,
+    });
+
+    // A4 dimensions in mm
+    const A4_W = 210;
+    const A4_H = 297;
+    const MARGIN = 12; // mm on all sides
+    const FOOTER_H = 10; // mm reserved for footer bar
+
+    const contentW = A4_W - MARGIN * 2;
+    const contentH = A4_H - MARGIN - FOOTER_H - MARGIN; // top + bottom + footer
+
+    const imgW = canvas.width;
+    const imgH = canvas.height;
+
+    // Scale factor: fit canvas width to content width
+    const mmPerPx = contentW / (imgW / 2); // /2 because scale:2
+    const totalImgH_mm = (imgH / 2) * mmPerPx;
+
+    const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+
+    let yRemaining = totalImgH_mm;
+    let srcY = 0; // in canvas px
+    let pageNum = 0;
+
+    // Pre-calculate total pages
+    const totalPages = Math.ceil(totalImgH_mm / contentH);
+
+    while (yRemaining > 0) {
+      if (pageNum > 0) pdf.addPage();
+      pageNum++;
+
+      const sliceH_mm = Math.min(yRemaining, contentH);
+      const sliceH_px = Math.round((sliceH_mm / mmPerPx) * 2); // back to canvas px
+
+      // Slice the canvas into a temporary canvas for this page
+      const sliceCanvas = document.createElement("canvas");
+      sliceCanvas.width = imgW;
+      sliceCanvas.height = sliceH_px;
+      const ctx = sliceCanvas.getContext("2d");
+      ctx.drawImage(canvas, 0, srcY, imgW, sliceH_px, 0, 0, imgW, sliceH_px);
+
+      const sliceDataUrl = sliceCanvas.toDataURL("image/jpeg", 0.95);
+      pdf.addImage(sliceDataUrl, "JPEG", MARGIN, MARGIN, contentW, sliceH_mm);
+
+      // Draw footer bar
+      const barY = A4_H - FOOTER_H;
+      const textY = barY + 6.5;
+      pdf.setFillColor(61, 155, 130);
+      pdf.rect(0, barY, A4_W, FOOTER_H, "F");
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFontSize(9);
+      pdf.text(exportedAt, MARGIN, textY, { align: "left" });
+      pdf.text(labels.pdfFooter, A4_W / 2, textY, { align: "center" });
+      pdf.text(`${pageNum}/${totalPages}`, A4_W - MARGIN, textY, { align: "right" });
+
+      srcY += sliceH_px;
+      yRemaining -= sliceH_mm;
+    }
+
+    const blobUrl = pdf.output("bloburl");
+    window.open(blobUrl, "_blank");
+  } catch (err) {
+    console.error("PDF export failed:", err);
+    window.alert(labels.pdfAlert);
+  } finally {
+    element.remove();
+  }
 }
 
 function normalizeMode(mode) {
@@ -182,6 +297,7 @@ function ResultsList() {
       pdfTitle: t("results.pdfTitle"),
       pdfHeading: t("results.pdfHeading"),
       pdfChartAlt: t("results.pdfChartAlt"),
+      pdfLogoAlt: t("results.pdfLogoAlt"),
       pdfFooter: t("results.pdfFooter"),
     }),
     [t],
@@ -216,7 +332,7 @@ function ResultsList() {
       const showChart = Boolean(result.echarts_option);
       const showText = Boolean(result.text_report);
       const showGrid = Boolean(result.grid?.columns?.length);
-      exportResultPdf({
+      await exportResultPdf({
         prompt: record.prompt || "",
         chartInstance: null,
         textReport: result.text_report || "",
@@ -226,6 +342,8 @@ function ResultsList() {
         showGrid,
         language: result.language || record.language || "en",
         labels: pdfLabels,
+        logoUrl: assetUrl("helix-logo.png"),
+        locale,
       });
     } catch (err) {
       setError(failMessage(err, t, "results.exportFailed"));
@@ -336,7 +454,7 @@ function ResultsList() {
 
 function ResultDetail({ resultId }) {
   const chartRef = useRef(null);
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [record, setRecord] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -350,6 +468,7 @@ function ResultDetail({ resultId }) {
       pdfTitle: t("results.pdfTitle"),
       pdfHeading: t("results.pdfHeading"),
       pdfChartAlt: t("results.pdfChartAlt"),
+      pdfLogoAlt: t("results.pdfLogoAlt"),
       pdfFooter: t("results.pdfFooter"),
     }),
     [t],
@@ -458,8 +577,8 @@ function ResultDetail({ resultId }) {
             <IconButton
               type="button"
               icon={FileDown}
-              onClick={() =>
-                exportResultPdf({
+              onClick={async () => {
+                await exportResultPdf({
                   prompt: editedPrompt,
                   chartInstance: chartRef.current?.getEchartsInstance?.(),
                   textReport: editedReport,
@@ -469,8 +588,10 @@ function ResultDetail({ resultId }) {
                   showGrid,
                   language,
                   labels: pdfLabels,
-                })
-              }
+                  logoUrl: assetUrl("helix-logo.png"),
+                  locale,
+                });
+              }}
               className="rounded-xl border border-line bg-paper px-4 py-2 text-sm font-medium text-ink hover:bg-fog"
             >
               {t("results.exportPdf")}

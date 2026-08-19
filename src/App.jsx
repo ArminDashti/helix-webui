@@ -21,9 +21,11 @@ import RulesPage from "./pages/RulesPage.jsx";
 import SettingsPage from "./pages/SettingsPage.jsx";
 import SkillsPage from "./pages/SkillsPage.jsx";
 
+const routerBasename = (import.meta.env.BASE_URL || "/").replace(/\/$/, "") || undefined;
+
 export default function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={routerBasename}>
       <I18nProvider>
       <ApiStatusProvider>
         <Routes>

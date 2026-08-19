@@ -10,7 +10,6 @@ import { failMessage } from "../i18n/apiErrors.js";
 const PIPELINE_DESIGNER_HINT = {
   id: "pipeline_designer",
   name: "Pipeline Designer",
-  human_name: "Maya",
   description: "Designs and documents analysis pipelines",
 };
 
@@ -24,7 +23,6 @@ export default function NewAgentPage() {
   const [error, setError] = useState(null);
   const [newId, setNewId] = useState(PIPELINE_DESIGNER_HINT.id);
   const [newName, setNewName] = useState(PIPELINE_DESIGNER_HINT.name);
-  const [newHumanName, setNewHumanName] = useState(PIPELINE_DESIGNER_HINT.human_name);
   const [newDescription, setNewDescription] = useState(
     PIPELINE_DESIGNER_HINT.description,
   );
@@ -32,7 +30,6 @@ export default function NewAgentPage() {
   function fillPipelineDesigner() {
     setNewId(PIPELINE_DESIGNER_HINT.id);
     setNewName(t("agents.templateRole"));
-    setNewHumanName(t("agents.templateHuman"));
     setNewDescription(t("agents.templateDescription"));
   }
 
@@ -44,7 +41,6 @@ export default function NewAgentPage() {
       await createAgent({
         id: newId.trim(),
         name: newName.trim(),
-        human_name: newHumanName.trim(),
         description: newDescription.trim(),
       });
       navigate("/agents");
@@ -89,16 +85,6 @@ export default function NewAgentPage() {
               onChange={(e) => setNewId(e.target.value)}
               className={inputClass}
               placeholder={t("agents.idPlaceholder")}
-              required
-            />
-          </label>
-          <label className="block text-sm">
-            <span className="font-medium text-ink">{t("agents.colHumanName")}</span>
-            <input
-              value={newHumanName}
-              onChange={(e) => setNewHumanName(e.target.value)}
-              className={inputClass}
-              placeholder={t("agents.humanPlaceholder")}
               required
             />
           </label>

@@ -70,7 +70,7 @@
       "disconnected": "قطع",
       "lineTitle": "{{label}} {{state}}"
     },
-    "credit": "ساختهٔ آرمین و Cursor"
+    "credit": "ساختهٔ Dashti Technologies LLC (آرمین دشتی)"
   },
   "errors": {
     "title": "خطا",
@@ -226,10 +226,11 @@
     "sectionReport": "گزارش",
     "sectionGrid": "جدول",
     "emptyPayload": "برای این اجرا نمودار، گزارش یا جدولی برنگشت.",
-    "pdfTitle": "خروجی Helix",
-    "pdfHeading": "گزارش Helix",
+    "pdfTitle": "Helix",
+    "pdfHeading": "Helix",
     "pdfChartAlt": "نمودار",
-    "pdfFooter": "© ۲۰۲۶ فناوری دشتی (آرمین دشتی)"
+    "pdfLogoAlt": "لوگوی Helix",
+    "pdfFooter": "ساختهٔ Dashti Technologies LLC (آرمین دشتی)"
   },
   "logs": {
     "title": "گزارش‌ها",
@@ -400,7 +401,6 @@
     "new": "عامل جدید",
     "newTitle": "عامل جدید",
     "editTitle": "ویرایش عامل",
-    "colHumanName": "نام انسانی",
     "colRole": "نقش",
     "colRules": "قوانین",
     "colSkills": "مهارت‌ها",
@@ -417,10 +417,8 @@
     "assignedOnlyHint": "عامل‌ها فقط از قوانین و مهارت‌های تخصیص‌یافته استفاده می‌کنند.",
     "templateButton": "استفاده از الگوی طراح خط لوله",
     "idPlaceholder": "pipeline_designer",
-    "humanPlaceholder": "مایا",
     "rolePlaceholder": "طراح خط لوله",
     "templateRole": "طراح خط لوله",
-    "templateHuman": "مایا",
     "templateDescription": "خط لوله‌های تحلیل را طراحی و مستند می‌کند"
   },
   "assignments": {

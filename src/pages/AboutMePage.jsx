@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { User } from "lucide-react";
 import PageHeader from "../components/PageHeader.jsx";
 import { useI18n } from "../context/I18nContext.jsx";
+import { assetUrl } from "../utils/assetUrl.js";
 
 function ContactEmail() {
   const { t } = useI18n();
@@ -45,7 +46,7 @@ export default function AboutMePage() {
       <div className="grid gap-4 sm:grid-cols-[160px_1fr] sm:items-start">
         <div className="overflow-hidden rounded-2xl border border-line/80 bg-fog/40">
           <img
-            src="/about-me/armin.png"
+            src={assetUrl("about-me/armin.png")}
             alt={t("aboutMe.photoAlt")}
             className="aspect-[4/5] w-full object-cover"
             onError={(e) => {

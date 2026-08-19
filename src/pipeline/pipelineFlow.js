@@ -238,17 +238,35 @@ export function validateFlow(flow, t) {
   return errors;
 }
 
+function instanceId(agentId, occurrence) {
+  if (occurrence <= 1) return agentId;
+  return `${agentId}__${occurrence}`;
+}
+
+function spineDefinitionIds(children) {
+  if (!children?.length) return [];
+  const spine = [children[0].agent_id].filter(Boolean);
+  for (const stage of children) {
+    const nxt = stage.next_agent_id;
+    if (nxt && (stage.then || "proceed") !== "stop") spine.push(nxt);
+  }
+  return spine;
+}
+
+function spineInstanceIds(children) {
+  const counts = {};
+  return spineDefinitionIds(children).map((aid) => {
+    counts[aid] = (counts[aid] || 0) + 1;
+    return instanceId(aid, counts[aid]);
+  });
+}
+
+const RETRY_AGENT_IDS = new Set(["data-gatherer", "result-builder", "publisher"]);
+
 export function layoutPositions(flow) {
   const positions = {};
   let y = 40;
-  const ids = [];
-  for (const stage of flow?.children || []) {
-    if (stage.agent_id && !ids.includes(stage.agent_id)) ids.push(stage.agent_id);
-    if (stage.next_agent_id && !ids.includes(stage.next_agent_id)) {
-      ids.push(stage.next_agent_id);
-    }
-  }
-  for (const id of ids) {
+  for (const id of spineInstanceIds(flow?.children || [])) {
     positions[id] = { x: 80, y };
     y += 110;
   }
@@ -268,24 +286,21 @@ export function compileFlow(flow, positions = {}) {
   }
   const errs = validateFlow(flow);
   if (errs.length) throw new Error(errs[0]);
-  const nodeIds = [];
-  for (const stage of flow.children || []) {
-    for (const id of [stage.agent_id, stage.next_agent_id]) {
-      if (id && !nodeIds.includes(id)) nodeIds.push(id);
-    }
-  }
-  if (!nodeIds.length) throw new Error("pipeline_flow must include at least one agent");
+  const spine = spineInstanceIds(flow.children || []);
+  if (!spine.length) throw new Error("pipeline_flow must include at least one agent");
   const layout = layoutPositions(flow);
-  const nodes = nodeIds.map((id) => ({
+  const nodes = spine.map((id) => ({
     id,
     position: positions[id] || layout[id] || { x: 0, y: 0 },
   }));
   const edges = [];
   (flow.children || []).forEach((stage, i) => {
     const thenAct = stage.then || "proceed";
-    const target = stage.next_agent_id;
-    if (thenAct === "stop" || !target) return;
-    const source = stage.agent_id;
+    const targetDef = stage.next_agent_id;
+    if (thenAct === "stop" || !targetDef) return;
+    const source = spine[i];
+    const target = spine[i + 1];
+    if (!source || !target) return;
     let when = { type: "always" };
     let kind = "forward";
     if (stage.action !== "proceed") {
@@ -305,8 +320,53 @@ export function compileFlow(flow, positions = {}) {
       limit: DEFAULT_EDGE_LIMIT,
     });
   });
+  for (const nodeId of spine) {
+    const defId = nodeId.includes("__") ? nodeId.split("__")[0] : nodeId;
+    if (RETRY_AGENT_IDS.has(defId)) {
+      edges.push({
+        id: `e_retry_${nodeId}`,
+        source: nodeId,
+        target: nodeId,
+        direction: "back",
+        kind: "back",
+        when: { type: "on_failure" },
+        limit: DEFAULT_EDGE_LIMIT,
+      });
+    }
+  }
+  const validatorNodes = spine.filter(
+    (nid) => (nid.includes("__") ? nid.split("__")[0] : nid) === "validator",
+  );
+  const dataGatherer = spine.find(
+    (nid) => (nid.includes("__") ? nid.split("__")[0] : nid) === "data-gatherer",
+  );
+  const resultBuilder = spine.find(
+    (nid) => (nid.includes("__") ? nid.split("__")[0] : nid) === "result-builder",
+  );
+  if (validatorNodes[0] && dataGatherer) {
+    edges.push({
+      id: `e_val_fail_${validatorNodes[0]}`,
+      source: validatorNodes[0],
+      target: dataGatherer,
+      direction: "back",
+      kind: "result_is",
+      when: { type: "on_status", status: "fail" },
+      limit: DEFAULT_EDGE_LIMIT,
+    });
+  }
+  if (validatorNodes[1] && resultBuilder) {
+    edges.push({
+      id: `e_val_fail_${validatorNodes[1]}`,
+      source: validatorNodes[1],
+      target: resultBuilder,
+      direction: "back",
+      kind: "result_is",
+      when: { type: "on_status", status: "fail" },
+      limit: DEFAULT_EDGE_LIMIT,
+    });
+  }
   return {
-    entry: nodeIds[0],
+    entry: spine[0],
     nodes: applyPositions(nodes, positions),
     edges,
   };

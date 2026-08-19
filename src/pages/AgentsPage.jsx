@@ -131,11 +131,6 @@ export default function AgentsPage() {
       ),
     },
     {
-      key: "human_name",
-      label: t("agents.colHumanName"),
-      render: (agent) => agent.human_name || t("common.noneDash"),
-    },
-    {
       key: "name",
       label: t("agents.colRole"),
       render: (agent) => agent.name || agent.id,

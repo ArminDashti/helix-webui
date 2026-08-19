@@ -1,0 +1,101 @@
+server {
+    listen 80;
+    listen [::]:80;
+    server_name _;
+
+    location = /helix {
+        return 301 /helix/;
+    }
+
+    location /helix/api/ {
+        proxy_pass http://${API_HOST}:${API_PORT}/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 600s;
+        proxy_send_timeout 600s;
+    }
+
+    location /helix/assets/ {
+        alias /usr/share/nginx/html/assets/;
+        expires 7d;
+        add_header Cache-Control "public, immutable";
+    }
+
+    location /helix/ {
+        alias /usr/share/nginx/html/;
+        try_files $uri $uri/ @helix_spa;
+    }
+
+    location @helix_spa {
+        root /usr/share/nginx/html;
+        rewrite ^ /index.html break;
+    }
+
+    location = /erp {
+        return 301 /erp/;
+    }
+
+    location /erp/ {
+        rewrite ^/erp/(.*)$ /$1 break;
+        proxy_pass http://erp/;
+        proxy_http_version 1.1;
+        proxy_set_header Host localhost:3050;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+        proxy_connect_timeout 30s;
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
+        proxy_buffering off;
+        proxy_cache off;
+        add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0" always;
+        add_header Pragma "no-cache" always;
+        add_header Expires "0" always;
+    }
+
+    location = /pakhsh360 {
+        return 301 /pakhsh360/;
+    }
+
+    location /pakhsh360/ {
+        rewrite ^/pakhsh360/(.*)$ /$1 break;
+        proxy_pass http://host.docker.internal:3010/;
+        proxy_http_version 1.1;
+        proxy_set_header Host localhost:3010;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+        proxy_redirect / /pakhsh360/;
+        proxy_connect_timeout 30s;
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
+        proxy_buffering off;
+        proxy_cache off;
+        add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0" always;
+        add_header Pragma "no-cache" always;
+        add_header Expires "0" always;
+    }
+
+    # SSRS uses Windows NTLM, which cannot pass through this nginx. Send the
+    # browser to the report portal on 8085 instead of proxying.
+    location = /Reports {
+        return 302 http://$host:8085/Reports/;
+    }
+
+    location /Reports/ {
+        return 302 http://$host:8085$request_uri;
+    }
+
+    location = /ReportServer {
+        return 302 http://$host:8085/ReportServer/;
+    }
+
+    location /ReportServer/ {
+        return 302 http://$host:8085$request_uri;
+    }
+}

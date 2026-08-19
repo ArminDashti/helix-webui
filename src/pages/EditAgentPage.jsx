@@ -16,7 +16,6 @@ export default function EditAgentPage() {
   const { t } = useI18n();
   const [agent, setAgent] = useState(null);
   const [name, setName] = useState("");
-  const [humanName, setHumanName] = useState("");
   const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -35,7 +34,6 @@ export default function EditAgentPage() {
         }
         setAgent(found);
         setName(found.name || found.id);
-        setHumanName(found.human_name || "");
         setDescription(found.description || "");
       } catch (err) {
         if (!cancelled) {
@@ -62,7 +60,6 @@ export default function EditAgentPage() {
     try {
       await updateAgent(agent.id, {
         name,
-        human_name: humanName,
         description,
       });
       navigate("/agents");
@@ -96,15 +93,6 @@ export default function EditAgentPage() {
         <label className="block text-sm">
           <span className="font-medium text-ink">{t("common.id")}</span>
           <input value={agent?.id || agentId} className={inputClass} disabled />
-        </label>
-        <label className="block text-sm">
-          <span className="font-medium text-ink">{t("agents.colHumanName")}</span>
-          <input
-            value={humanName}
-            onChange={(e) => setHumanName(e.target.value)}
-            className={inputClass}
-            required
-          />
         </label>
         <label className="block text-sm">
           <span className="font-medium text-ink">{t("agents.colRole")}</span>

@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { useI18n } from "../context/I18nContext.jsx";
 
@@ -11,6 +11,16 @@ export default function PageHeader({
 }) {
   const navigate = useNavigate();
   const { t } = useI18n();
+  const location = useLocation();
+
+  function resolveEffectiveBackTarget() {
+    if (backTo) return backTo;
+    const pathname = location.pathname || "/";
+    if (pathname === "/") return null;
+    const parts = pathname.split("/").filter(Boolean);
+    if (parts.length <= 1) return "/";
+    return `/${parts.slice(0, -1).join("/")}`;
+  }
 
   function goBack() {
     const idx = window.history.state?.idx;
@@ -18,16 +28,15 @@ export default function PageHeader({
       navigate(-1);
       return;
     }
-    if (backTo) {
-      navigate(backTo);
-    }
+    const target = resolveEffectiveBackTarget();
+    if (target) navigate(target);
   }
 
   return (
     <header className="flex shrink-0 flex-wrap items-end justify-between gap-2">
       <div className="min-w-0">
         <h1 className="flex items-center gap-2 font-display text-xl text-ink sm:text-2xl">
-          {backTo ? (
+          {resolveEffectiveBackTarget() || backTo ? (
             <button
               type="button"
               onClick={goBack}

@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { useApiStatus } from "../context/ApiStatusContext.jsx";
 import { useI18n } from "../context/I18nContext.jsx";
+import { assetUrl } from "../utils/assetUrl.js";
 
 const THEME_STORAGE_KEY = "helix-theme";
 
@@ -111,7 +112,6 @@ export default function Layout() {
   const mainLinks = [
     { to: "/", label: t("nav.analysis"), icon: BarChart3, end: true },
     { to: "/results", label: t("nav.results"), icon: Play },
-    { to: "/logs", label: t("nav.logs"), icon: ScrollText },
     { to: "/rules", label: t("nav.rules"), icon: Scale },
     { to: "/skills", label: t("nav.skills"), icon: Sparkles },
     { to: "/agents", label: t("nav.agents"), icon: Bot },
@@ -122,6 +122,7 @@ export default function Layout() {
   const footerLinks = [
     { to: "/admin", label: t("nav.admin"), icon: Shield },
     { to: "/settings", label: t("nav.settings"), icon: Settings },
+    { to: "/logs", label: t("nav.logs"), icon: ScrollText },
     { to: "/about-me", label: t("nav.aboutMe"), icon: User },
   ];
 
@@ -154,16 +155,16 @@ export default function Layout() {
       >
         <div className="mb-2 flex items-center gap-2 rounded-xl border border-line/80 bg-fog/30 px-2 py-2">
           <div
-            className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line/70 bg-paper"
+            className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-lg"
             aria-label={t("layout.logoAria")}
             title={t("layout.logoTitle")}
           >
             <img
-              src="/logo.svg"
+              src={assetUrl("helix-logo.png")}
               alt={t("layout.logoAlt")}
-              className="size-7 object-contain"
-              width={28}
-              height={28}
+              className="size-9 object-contain"
+              width={36}
+              height={36}
             />
           </div>
           <div className="min-w-0">

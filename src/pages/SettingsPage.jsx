@@ -51,7 +51,7 @@ const EMPTY_OPENROUTER = {
   token: "",
   base_url: OPENROUTER_BASE_URL,
   app_name: "Helix",
-  default_model: "auto",
+  default_model: "composer-2.5",
   agents: {},
   token_configured: false,
 };
@@ -729,7 +729,7 @@ export default function SettingsPage() {
                 >
                   <ModelCombobox
                     id={`agent-${agentId}`}
-                    value={orForm.agents?.[agentId]?.model || "auto"}
+                    value={orForm.agents?.[agentId]?.model || "composer-2.5"}
                     onChange={(v) => updateAgentModel(agentId, v)}
                     models={models}
                     loading={modelsLoading}
