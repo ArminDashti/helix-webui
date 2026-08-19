@@ -209,6 +209,7 @@
     "colTitle": "عنوان",
     "colMode": "حالت",
     "colDatetime": "تاریخ و زمان",
+    "colDuration": "مدت",
     "colShow": "نمایش",
     "colExport": "خروجی",
     "colDelete": "حذف",
@@ -230,6 +231,7 @@
     "pdfHeading": "Helix",
     "pdfChartAlt": "نمودار",
     "pdfLogoAlt": "لوگوی Helix",
+    "pdfCompanyLogoAlt": "لوگوی شرکت",
     "pdfFooter": "ساختهٔ Dashti Technologies LLC (آرمین دشتی)"
   },
   "logs": {

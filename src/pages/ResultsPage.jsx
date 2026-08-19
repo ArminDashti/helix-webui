@@ -21,7 +21,7 @@ import IconButton from "../components/IconButton.jsx";
 import PageHeader from "../components/PageHeader.jsx";
 import { useI18n } from "../context/I18nContext.jsx";
 import { failMessage } from "../i18n/apiErrors.js";
-import { formatDateTime } from "../i18n/format.js";
+import { formatDateTime, formatDurationSeconds } from "../i18n/format.js";
 import { hasPersianScript } from "../utils/textDirection.js";
 import { assetUrl } from "../utils/assetUrl.js";
 import html2canvas from "html2canvas";
@@ -93,6 +93,7 @@ async function exportResultPdf({
   language,
   labels,
   logoUrl,
+  companyLogoUrl,
   locale,
 }) {
   let chartImg = "";
@@ -111,12 +112,16 @@ async function exportResultPdf({
 
   const dir = resolveDir(language, textReport || prompt);
   const lang = dir === "rtl" ? "fa" : "en";
-  const safePrompt = escapeHtml(prompt);
   const safeReport = escapeHtml(textReport);
   const exportedAt = formatDateTime(new Date(), locale || "en");
 
-  const logoDataUrl = await loadLogoDataUrl(logoUrl);
+  const [logoDataUrl, companyLogoDataUrl] = await Promise.all([
+    loadLogoDataUrl(logoUrl),
+    loadLogoDataUrl(companyLogoUrl),
+  ]);
   const safeLogoUrl = escapeHtml(logoDataUrl);
+  const safeCompanyLogoUrl = escapeHtml(companyLogoDataUrl);
+  const reportTitle = escapeHtml((prompt || "").trim() || labels.pdfHeading);
 
   // Ensure Vazirmatn is loaded so html2canvas captures correct glyphs.
   try {
@@ -139,7 +144,7 @@ async function exportResultPdf({
   element.style.position = "absolute";
   element.style.left = "-9999px";
   element.style.top = "0";
-  element.style.width = "794px"; // ~A4 width at 96dpi
+  element.style.width = "1123px"; // ~A4 landscape width at 96dpi
   element.style.background = "#ffffff";
   element.setAttribute("dir", dir);
   element.setAttribute("lang", lang);
@@ -147,21 +152,25 @@ async function exportResultPdf({
 
   const S = {
     root: `font-family:Vazirmatn,system-ui,sans-serif;color:#111;background:#fff;padding:16px;box-sizing:border-box;`,
-    header: `display:flex;align-items:center;justify-content:center;gap:12px;margin:0 0 14px 0;padding:12px 14px;border-radius:14px;background:#3d9b82;color:#fff;`,
-    logo: `height:44px;width:auto;object-fit:contain;`,
-    title: `direction:ltr;text-align:center;font-size:22px;font-weight:600;margin:0;color:#fff;`,
-    meta: `margin:0 0 14px 0;padding:12px 14px;border-radius:14px;background:#eef7f4;color:#0f3b2f;font-size:13px;font-weight:600;white-space:pre-wrap;line-height:1.4;`,
+    header: `display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 14px 0;padding:14px 12px;border:1px solid #1e3a5f;background:transparent;direction:ltr;`,
+    headerSide: `flex:0 0 168px;display:flex;align-items:center;`,
+    headerCenter: `flex:1 1 auto;min-width:0;`,
+    logo: `height:56px;width:auto;max-width:160px;object-fit:contain;`,
+    title: `text-align:center;font-size:16px;font-weight:600;margin:0;color:#111;line-height:1.7;overflow:visible;white-space:normal;`,
     chartWrap: `margin-bottom:14px;`,
     chart: `max-width:100%;height:auto;border:1px solid #3d9b82;border-radius:14px;display:block;`,
     article: `margin-bottom:14px;padding:14px 16px;border:2px solid #3d9b82;border-radius:14px;background:#f6fbf9;white-space:pre-wrap;line-height:1.6;font-size:14px;`,
-    table: `width:100%;border-collapse:collapse;margin-top:14px;font-size:13px;`,
-    th: `border:1px solid #cfe6dd;padding:8px 10px;text-align:start;background:#3d9b82;color:#fff;font-weight:600;`,
-    td: `border:1px solid #cfe6dd;padding:8px 10px;text-align:start;`,
-    tdEven: `border:1px solid #cfe6dd;padding:8px 10px;text-align:start;background:#eef7f4;`,
+    table: `width:100%;border-collapse:collapse;margin-top:14px;font-size:13px;line-height:1.8;`,
+    th: `border:1px solid #1e3a5f;padding:14px 10px;text-align:center;vertical-align:middle;background:transparent;color:#111;font-weight:600;line-height:1.8;overflow:visible;`,
+    td: `border:1px solid #cfe6dd;padding:12px 10px;text-align:center;vertical-align:middle;line-height:1.8;`,
+    tdEven: `border:1px solid #cfe6dd;padding:12px 10px;text-align:center;vertical-align:middle;line-height:1.8;background:#eef7f4;`,
   };
 
   const logoImgInline = safeLogoUrl
     ? `<img style="${S.logo}" src="${safeLogoUrl}" alt="${escapeHtml(labels.pdfLogoAlt)}" />`
+    : "";
+  const companyLogoImgInline = safeCompanyLogoUrl
+    ? `<img style="${S.logo}" src="${safeCompanyLogoUrl}" alt="${escapeHtml(labels.pdfCompanyLogoAlt)}" />`
     : "";
   const chartImgInline = chartImg
     ? `<div style="${S.chartWrap}"><img style="${S.chart}" src="${chartImg}" alt="${escapeHtml(labels.pdfChartAlt)}" /></div>`
@@ -189,10 +198,10 @@ async function exportResultPdf({
   element.innerHTML = `
     <div style="${S.root}">
       <div style="${S.header}">
-        ${logoImgInline}
-        <h1 style="${S.title}">${escapeHtml(labels.pdfHeading)}</h1>
+        <div style="${S.headerSide}justify-content:flex-start;">${logoImgInline}</div>
+        <div style="${S.headerCenter}"><h1 style="${S.title}" dir="${dir}">${reportTitle}</h1></div>
+        <div style="${S.headerSide}justify-content:flex-end;">${companyLogoImgInline}</div>
       </div>
-      <div style="${S.meta}">${safePrompt}</div>
       ${chartImgInline}
       ${articleInline}
       ${gridInline}
@@ -211,9 +220,9 @@ async function exportResultPdf({
       logging: false,
     });
 
-    // A4 dimensions in mm
-    const A4_W = 210;
-    const A4_H = 297;
+    // A4 landscape dimensions in mm
+    const A4_W = 297;
+    const A4_H = 210;
     const MARGIN = 12; // mm on all sides
     const FOOTER_H = 10; // mm reserved for footer bar
 
@@ -227,7 +236,7 @@ async function exportResultPdf({
     const mmPerPx = contentW / (imgW / 2); // /2 because scale:2
     const totalImgH_mm = (imgH / 2) * mmPerPx;
 
-    const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+    const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "landscape" });
 
     let yRemaining = totalImgH_mm;
     let srcY = 0; // in canvas px
@@ -253,12 +262,12 @@ async function exportResultPdf({
       const sliceDataUrl = sliceCanvas.toDataURL("image/jpeg", 0.95);
       pdf.addImage(sliceDataUrl, "JPEG", MARGIN, MARGIN, contentW, sliceH_mm);
 
-      // Draw footer bar
       const barY = A4_H - FOOTER_H;
       const textY = barY + 6.5;
-      pdf.setFillColor(61, 155, 130);
-      pdf.rect(0, barY, A4_W, FOOTER_H, "F");
-      pdf.setTextColor(255, 255, 255);
+      pdf.setDrawColor(30, 58, 95);
+      pdf.setLineWidth(0.3);
+      pdf.line(MARGIN, barY, A4_W - MARGIN, barY);
+      pdf.setTextColor(17, 17, 17);
       pdf.setFontSize(9);
       pdf.text(exportedAt, MARGIN, textY, { align: "left" });
       pdf.text(labels.pdfFooter, A4_W / 2, textY, { align: "center" });
@@ -298,6 +307,7 @@ function ResultsList() {
       pdfHeading: t("results.pdfHeading"),
       pdfChartAlt: t("results.pdfChartAlt"),
       pdfLogoAlt: t("results.pdfLogoAlt"),
+      pdfCompanyLogoAlt: t("results.pdfCompanyLogoAlt"),
       pdfFooter: t("results.pdfFooter"),
     }),
     [t],
@@ -343,6 +353,7 @@ function ResultsList() {
         language: result.language || record.language || "en",
         labels: pdfLabels,
         logoUrl: assetUrl("helix-logo.png"),
+        companyLogoUrl: assetUrl("company-logo.png"),
         locale,
       });
     } catch (err) {
@@ -384,6 +395,15 @@ function ResultsList() {
         render: (item) => (
           <span className="whitespace-nowrap font-sans text-[13px]">
             {formatDateTime(item.created_at, locale)}
+          </span>
+        ),
+      },
+      {
+        key: "duration",
+        label: t("results.colDuration"),
+        render: (item) => (
+          <span className="whitespace-nowrap font-sans text-[13px]">
+            {formatDurationSeconds(item.duration_s) || t("common.noneDash")}
           </span>
         ),
       },
@@ -469,6 +489,7 @@ function ResultDetail({ resultId }) {
       pdfHeading: t("results.pdfHeading"),
       pdfChartAlt: t("results.pdfChartAlt"),
       pdfLogoAlt: t("results.pdfLogoAlt"),
+      pdfCompanyLogoAlt: t("results.pdfCompanyLogoAlt"),
       pdfFooter: t("results.pdfFooter"),
     }),
     [t],
@@ -589,6 +610,7 @@ function ResultDetail({ resultId }) {
                   language,
                   labels: pdfLabels,
                   logoUrl: assetUrl("helix-logo.png"),
+                  companyLogoUrl: assetUrl("company-logo.png"),
                   locale,
                 });
               }}

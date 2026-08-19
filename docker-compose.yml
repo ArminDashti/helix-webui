@@ -19,13 +19,10 @@ services:
       - ./nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
     expose:
       - "80"
-    ports:
-      - target: 80
-        published: ${PUBLISH_PORT:-80}
-        protocol: tcp
     networks:
       - helix-net
       - erp-net
+      - chatbot-net
 
 networks:
   helix-net:
@@ -33,4 +30,7 @@ networks:
     external: true
   erp-net:
     name: erp-net
+    external: true
+  chatbot-net:
+    name: chatbot-net
     external: true

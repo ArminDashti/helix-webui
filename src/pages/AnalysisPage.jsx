@@ -169,7 +169,13 @@ export default function AnalysisPage() {
     abortRef.current = controller;
 
     try {
+      const startedAt = performance.now();
       const final = await runChat(payload, controller.signal);
+      const clientDurationS = (performance.now() - startedAt) / 1000;
+      const durationS =
+        typeof final?.duration_s === "number" && Number.isFinite(final.duration_s)
+          ? final.duration_s
+          : clientDurationS;
       setModalOpen(false);
       setRunning(false);
       await createResult({
@@ -177,6 +183,7 @@ export default function AnalysisPage() {
         mode,
         language: locale,
         payload: final,
+        duration_s: durationS,
       });
       navigate("/results");
     } catch (err) {

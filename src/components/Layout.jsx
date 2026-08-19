@@ -155,16 +155,16 @@ export default function Layout() {
       >
         <div className="mb-2 flex items-center gap-2 rounded-xl border border-line/80 bg-fog/30 px-2 py-2">
           <div
-            className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-lg"
+            className="flex h-12 w-[4.75rem] shrink-0 items-center justify-center overflow-hidden"
             aria-label={t("layout.logoAria")}
             title={t("layout.logoTitle")}
           >
             <img
               src={assetUrl("helix-logo.png")}
               alt={t("layout.logoAlt")}
-              className="size-9 object-contain"
-              width={36}
-              height={36}
+              className="h-12 w-auto max-w-[4.75rem] object-contain"
+              width={76}
+              height={48}
             />
           </div>
           <div className="min-w-0">

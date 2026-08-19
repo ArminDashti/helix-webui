@@ -209,6 +209,7 @@
     "colTitle": "Title",
     "colMode": "Mode",
     "colDatetime": "DateTime",
+    "colDuration": "Duration",
     "colShow": "Show",
     "colExport": "Export",
     "colDelete": "Delete",
@@ -230,6 +231,7 @@
     "pdfHeading": "Helix",
     "pdfChartAlt": "Chart",
     "pdfLogoAlt": "Helix logo",
+    "pdfCompanyLogoAlt": "Company logo",
     "pdfFooter": "Dashti Technologies LLC (Armin Dashti)"
   },
   "logs": {
