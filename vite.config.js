@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
 const basePath = process.env.VITE_BASE_PATH || "/helix/";
+const apiProxyTarget = process.env.VITE_API_PROXY || "http://127.0.0.1:8000";
 
 export default defineConfig({
   base: basePath,
@@ -12,10 +13,11 @@ export default defineConfig({
     host: true,
     proxy: {
       [`${basePath.replace(/\/$/, "")}/api`]: {
-        target: "http://127.0.0.1:8000",
+        target: apiProxyTarget,
         changeOrigin: true,
         rewrite: (path) => path.replace(new RegExp(`^${basePath.replace(/\/$/, "")}/api`), "/api"),
       },
     },
   },
 });
+
