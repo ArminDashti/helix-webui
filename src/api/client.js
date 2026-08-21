@@ -341,6 +341,19 @@ export async function saveDatabaseSettings(database) {
   });
 }
 
+export async function fetchSampleTiers() {
+  const data = await requestJson("/api/sample-tiers/");
+  return data.tiers || [];
+}
+
+export async function ensureSampleTier(tierId, { force = false } = {}) {
+  return requestJson(`/api/sample-tiers/${encodeURIComponent(tierId)}/ensure/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ force }),
+  });
+}
+
 export async function fetchProviderSettings() {
   return requestJson("/api/admin/provider/");
 }
@@ -409,9 +422,13 @@ export async function saveCursorSettings(cursor) {
   });
 }
 
-export async function fetchCursorModels({ force = false } = {}) {
+export async function fetchCursorModels({ force = false, silent = false } = {}) {
   const qs = force ? "?force=1" : "";
-  return requestJson(`/api/admin/cursor/models/${qs}`);
+  return requestJson(`/api/admin/cursor/models/${qs}`, { silent });
+}
+
+export async function fetchCursorInstallStatus({ silent = false } = {}) {
+  return requestJson("/api/admin/cursor/install-status/", { silent });
 }
 
 export async function fetchPipelineBundle() {
@@ -552,6 +569,7 @@ export async function streamRun(
     language = "en",
     report_type,
     chart_type,
+    chart_types,
     columns,
   },
   onEvent,
@@ -561,6 +579,7 @@ export async function streamRun(
   const body = { prompt, mode, language };
   if (report_type) body.report_type = report_type;
   if (chart_type) body.chart_type = chart_type;
+  if (chart_types?.length) body.chart_types = chart_types;
   if (columns?.length) body.columns = columns;
 
   let response;
@@ -683,7 +702,7 @@ export async function streamRun(
  * This avoids realtime streaming UI updates.
  */
 export async function runChat(
-  { prompt, mode, language = "en", report_type, chart_type, columns },
+  { prompt, mode, language = "en", report_type, chart_type, chart_types, columns },
   signal,
 ) {
   const path = "/api/chat";
@@ -694,6 +713,7 @@ export async function runChat(
   };
   if (report_type) body.report_type = report_type;
   if (chart_type) body.chart_type = chart_type;
+  if (chart_types?.length) body.chart_types = chart_types;
   if (columns?.length) body.columns = columns;
 
   const response = await requestJson(path, {

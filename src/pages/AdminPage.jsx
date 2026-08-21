@@ -16,6 +16,7 @@ const emptyUserForm = {
   username: "",
   display_name: "",
   is_admin: false,
+  data_access_plain: "",
 };
 
 function isArmin(user) {
@@ -61,6 +62,7 @@ export default function AdminPage() {
         username: userForm.username.trim(),
         display_name: userForm.display_name.trim(),
         is_admin: userForm.is_admin,
+        data_access_plain: userForm.data_access_plain.trim(),
       };
       if (editingUserId) {
         await updateUser(editingUserId, payload);
@@ -112,6 +114,16 @@ export default function AdminPage() {
         render: (user) => (user.is_admin ? t("admin.yes") : t("admin.no")),
       },
       {
+        key: "access",
+        label: t("admin.dataAccess"),
+        render: (user) =>
+          user.is_admin
+            ? t("admin.dataAccessAdmin")
+            : user.data_access_plain ||
+              (user.allowed_tables || []).join(", ") ||
+              t("common.noneDash"),
+      },
+      {
         key: "edit",
         label: t("common.edit"),
         render: (user) => (
@@ -124,6 +136,7 @@ export default function AdminPage() {
                 username: user.username,
                 display_name: user.display_name,
                 is_admin: Boolean(user.is_admin),
+                data_access_plain: user.data_access_plain || "",
               });
             }}
             className="rounded-lg border border-line bg-fog px-2 py-1.5 text-xs font-medium hover:bg-fog/80"
@@ -209,6 +222,25 @@ export default function AdminPage() {
               <span className="font-medium text-ink">{t("admin.isAdmin")}</span>
             </label>
           </div>
+          <label className="block text-sm">
+            <span className="font-medium text-ink">{t("admin.dataAccess")}</span>
+            <textarea
+              value={userForm.data_access_plain}
+              onChange={(e) =>
+                setUserForm((prev) => ({
+                  ...prev,
+                  data_access_plain: e.target.value,
+                }))
+              }
+              rows={3}
+              placeholder={t("admin.dataAccessPlaceholder")}
+              className={inputClass}
+              required={!userForm.is_admin && !isArmin(userForm)}
+            />
+            <span className="mt-1 block text-xs text-muted">
+              {t("admin.dataAccessHint")}
+            </span>
+          </label>
           <div className="flex flex-wrap gap-2">
             <IconButton
               type="submit"

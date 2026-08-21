@@ -52,7 +52,7 @@ export default function AnalysisPage() {
   );
   const [mode, setMode] = useState("chart");
   const [reportType, setReportType] = useState("medium");
-  const [chartType, setChartType] = useState("bar");
+  const [chartTypesSelected, setChartTypesSelected] = useState(["bar"]);
   const [columnsRaw, setColumnsRaw] = useState(
     "Category/Product/OrderQty/LineTotal",
   );
@@ -155,12 +155,20 @@ export default function AnalysisPage() {
     setRunning(true);
 
     const columns = mode === "grid" ? parseColumns(columnsRaw) : undefined;
+    const selectedCharts = needsChart(mode)
+      ? chartTypesSelected.slice(0, 4)
+      : undefined;
+    if (needsChart(mode) && (!selectedCharts || selectedCharts.length === 0)) {
+      setError(t("analysis.chartRequired"));
+      return;
+    }
     const payload = {
       prompt: trimmed,
       mode,
       language: locale,
       report_type: needsType(mode) ? reportType : undefined,
-      chart_type: needsChart(mode) ? chartType : undefined,
+      chart_type: selectedCharts?.[0],
+      chart_types: selectedCharts,
       columns,
     };
 
@@ -273,24 +281,46 @@ export default function AnalysisPage() {
 
           {needsChart(mode) ? (
             <div>
-              <label
-                htmlFor="chart_type"
-                className="block text-sm font-medium text-ink"
+              <div
+                className="mt-1.5 flex flex-wrap gap-2"
+                role="group"
+                aria-label={t("analysis.chart")}
               >
-                {t("analysis.chart")}
-              </label>
-              <select
-                id="chart_type"
-                value={chartType}
-                onChange={(e) => setChartType(e.target.value)}
-                className={selectClass}
-              >
-                {chartTypes.map((item) => (
-                  <option key={item.value} value={item.value}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
+                {chartTypes.map((item) => {
+                  const checked = chartTypesSelected.includes(item.value);
+                  const atCap =
+                    !checked && chartTypesSelected.length >= 4;
+                  return (
+                    <label
+                      key={item.value}
+                      className={[
+                        "inline-flex cursor-pointer items-center gap-1.5 rounded-xl border px-3 py-1.5 text-sm transition",
+                        checked
+                          ? "border-moss bg-moss/15 text-ink"
+                          : "border-line bg-paper text-muted hover:bg-fog",
+                        atCap ? "opacity-50" : "",
+                      ].join(" ")}
+                    >
+                      <input
+                        type="checkbox"
+                        className="accent-moss"
+                        checked={checked}
+                        disabled={atCap}
+                        onChange={() => {
+                          setChartTypesSelected((prev) => {
+                            if (prev.includes(item.value)) {
+                              return prev.filter((v) => v !== item.value);
+                            }
+                            if (prev.length >= 4) return prev;
+                            return [...prev, item.value];
+                          });
+                        }}
+                      />
+                      {item.label}
+                    </label>
+                  );
+                })}
+              </div>
             </div>
           ) : null}
 

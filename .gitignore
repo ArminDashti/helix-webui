@@ -50,3 +50,5 @@ node_modules/echarts/dist/echarts.js.map
 node_modules/lightningcss-win32-x64-msvc/lightningcss.win32-x64-msvc.node
 
 # github-commit-push-all: auto-ignore large files (>5MB)
+
+# AUTO-IGNORE-LARGE-FILES (>5MB) â€” managed by github-commit-push-all

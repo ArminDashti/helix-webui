@@ -4,6 +4,7 @@ import {
   BarChart3,
   Bot,
   Database,
+  LayoutTemplate,
   Monitor,
   Moon,
   Play,
@@ -19,6 +20,7 @@ import {
 import { useApiStatus } from "../context/ApiStatusContext.jsx";
 import { useI18n } from "../context/I18nContext.jsx";
 import { assetUrl } from "../utils/assetUrl.js";
+import pkg from "../../package.json";
 
 const THEME_STORAGE_KEY = "helix-theme";
 
@@ -112,6 +114,7 @@ export default function Layout() {
   const mainLinks = [
     { to: "/", label: t("nav.analysis"), icon: BarChart3, end: true },
     { to: "/results", label: t("nav.results"), icon: Play },
+    { to: "/canvas", label: t("nav.canvas"), icon: LayoutTemplate },
     { to: "/rules", label: t("nav.rules"), icon: Scale },
     { to: "/skills", label: t("nav.skills"), icon: Sparkles },
     { to: "/agents", label: t("nav.agents"), icon: Bot },
@@ -272,6 +275,9 @@ export default function Layout() {
           </div>
           <p className="rounded-xl border border-line/80 bg-fog/40 px-2 py-1.5 text-center text-sm leading-snug text-muted">
             {t("layout.credit")}
+            <span className="mt-0.5 block text-xs opacity-80">
+              {t("layout.version", { version: pkg.version })}
+            </span>
           </p>
         </div>
       </nav>

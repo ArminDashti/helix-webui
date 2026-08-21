@@ -9,10 +9,16 @@ import {
 } from "lucide-react";
 import {
   fetchAgents,
+  fetchCursorInstallStatus,
+  fetchCursorModels,
+  fetchCursorSettings,
   fetchDatabaseSettings,
   fetchOpenRouterModels,
   fetchOpenRouterSettings,
   fetchProviderSettings,
+  fetchSampleTiers,
+  ensureSampleTier,
+  saveCursorSettings,
   saveDatabaseSettings,
   saveOpenRouterSettings,
   saveProvider,
@@ -46,10 +52,20 @@ const EMPTY_DB = {
 const SSL_MODES = ["disable", "prefer", "require", "verify-ca", "verify-full"];
 
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
+const CURSOR_ADAPTER_BASE_URL = "http://127.0.0.1:8130/v1";
 
 const EMPTY_OPENROUTER = {
   token: "",
   base_url: OPENROUTER_BASE_URL,
+  app_name: "Helix",
+  default_model: "composer-2.5",
+  agents: {},
+  token_configured: false,
+};
+
+const EMPTY_CURSOR = {
+  token: "",
+  adapter_base_url: CURSOR_ADAPTER_BASE_URL,
   app_name: "Helix",
   default_model: "composer-2.5",
   agents: {},
@@ -270,6 +286,7 @@ export default function SettingsPage() {
     () => [
       { value: "openrouter", label: t("settings.apiOpenrouter") },
       { value: "openai_compatible", label: t("settings.apiOpenaiCompatible") },
+      { value: "cursor", label: t("settings.apiCursor") },
     ],
     [t],
   );
@@ -279,6 +296,8 @@ export default function SettingsPage() {
   const [connectionStringDirty, setConnectionStringDirty] = useState(false);
   const [provider, setProvider] = useState("openrouter");
   const [orForm, setOrForm] = useState(EMPTY_OPENROUTER);
+  const [cursorForm, setCursorForm] = useState(EMPTY_CURSOR);
+  const [cursorInstall, setCursorInstall] = useState(null);
   const [models, setModels] = useState([]);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsError, setModelsError] = useState(null);
@@ -287,7 +306,62 @@ export default function SettingsPage() {
   const [sectionErrors, setSectionErrors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [agentNameById, setAgentNameById] = useState({});
+  const [sampleTiers, setSampleTiers] = useState([]);
+  const [tierBusy, setTierBusy] = useState(null);
   const { checkConnection } = useApiStatus();
+
+  const isCursor = provider === "cursor";
+  const activeLlmForm = isCursor ? cursorForm : orForm;
+  const activeTokenConfigured = Boolean(activeLlmForm.token_configured);
+
+  async function reloadSampleTiers() {
+    try {
+      const tiers = await fetchSampleTiers();
+      setSampleTiers(tiers);
+    } catch {
+      setSampleTiers([]);
+    }
+  }
+
+  async function handleEnsureTier(tierId) {
+    setError(null);
+    setTierBusy(tierId);
+    try {
+      await ensureSampleTier(tierId);
+      await reloadSampleTiers();
+      setStatus(t("settings.tierDownloaded"));
+    } catch (err) {
+      setError(failMessage(err, t, "settings.tierDownloadFailed"));
+    } finally {
+      setTierBusy(null);
+    }
+  }
+
+  async function handleUseTier(tier) {
+    setError(null);
+    setTierBusy(tier.id);
+    try {
+      if (!tier.exists) {
+        await ensureSampleTier(tier.id);
+      }
+      const next = {
+        ...dbForm,
+        engine: "sqlite",
+        name: tier.filename,
+        path: "",
+      };
+      setDbForm(next);
+      setConnectionStringDirty(false);
+      await saveDatabaseSettings(next);
+      await reloadSampleTiers();
+      setStatus(t("settings.tierActive"));
+      await checkConnection({ silent: true });
+    } catch (err) {
+      setError(failMessage(err, t, "settings.tierUseFailed"));
+    } finally {
+      setTierBusy(null);
+    }
+  }
 
   function agentLabel(agentId) {
     return agentNameById[agentId] || agentId.replace(/_/g, " ");
@@ -330,6 +404,12 @@ export default function SettingsPage() {
         }
 
         try {
+          await reloadSampleTiers();
+        } catch {
+          /* optional */
+        }
+
+        try {
           const orData = await fetchOpenRouterSettings();
           setOrForm({ ...EMPTY_OPENROUTER, ...orData.openrouter, token: "" });
           anyOk = true;
@@ -341,10 +421,33 @@ export default function SettingsPage() {
         }
 
         try {
+          const cursorData = await fetchCursorSettings();
+          setCursorForm({
+            ...EMPTY_CURSOR,
+            ...cursorData.cursor,
+            token: "",
+          });
+          anyOk = true;
+        } catch (err) {
+          failures.push({
+            key: "settings.sectionCursorFail",
+            message: err instanceof Error ? err.message : "",
+          });
+        }
+
+        try {
+          const install = await fetchCursorInstallStatus({ silent: true });
+          setCursorInstall(install);
+        } catch {
+          setCursorInstall(null);
+        }
+
+        try {
           const providerData = await fetchProviderSettings();
+          const raw = providerData.provider;
           const nextProvider =
-            providerData.provider === "openai_compatible"
-              ? "openai_compatible"
+            raw === "openai_compatible" || raw === "cursor"
+              ? raw
               : "openrouter";
           setProvider(nextProvider);
           anyOk = true;
@@ -369,7 +472,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (loading) return;
-    if (!orForm.token_configured) {
+    if (!activeTokenConfigured) {
       setModels([]);
       setModelsError(null);
       setModelsLoading(false);
@@ -380,7 +483,9 @@ export default function SettingsPage() {
       setModelsLoading(true);
       setModelsError(null);
       try {
-        const data = await fetchOpenRouterModels({ silent: true });
+        const data = isCursor
+          ? await fetchCursorModels({ silent: true })
+          : await fetchOpenRouterModels({ silent: true });
         if (!cancelled) setModels(data.models || []);
       } catch (err) {
         if (!cancelled) {
@@ -396,7 +501,23 @@ export default function SettingsPage() {
     return () => {
       cancelled = true;
     };
-  }, [loading, orForm.token_configured, t]);
+  }, [loading, activeTokenConfigured, isCursor, t]);
+
+  useEffect(() => {
+    if (!isCursor) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const install = await fetchCursorInstallStatus({ silent: true });
+        if (!cancelled) setCursorInstall(install);
+      } catch {
+        if (!cancelled) setCursorInstall(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isCursor]);
 
   function defaultPortForEngine(engine) {
     if (engine === "sqlserver") return 1433;
@@ -432,7 +553,21 @@ export default function SettingsPage() {
     setOrForm((prev) => ({ ...prev, [key]: value }));
   }
 
+  function updateCursorField(key, value) {
+    setCursorForm((prev) => ({ ...prev, [key]: value }));
+  }
+
   function updateAgentModel(agentId, model) {
+    if (isCursor) {
+      setCursorForm((prev) => ({
+        ...prev,
+        agents: {
+          ...prev.agents,
+          [agentId]: { ...(prev.agents?.[agentId] || {}), model },
+        },
+      }));
+      return;
+    }
     setOrForm((prev) => ({
       ...prev,
       agents: {
@@ -444,14 +579,24 @@ export default function SettingsPage() {
 
   function handleApiChange(next) {
     setProvider(next);
-    if (next !== "openrouter") return;
-    setOrForm((prev) => {
-      const current = (prev.base_url || "").trim();
-      if (!current || current === OPENROUTER_BASE_URL) {
-        return { ...prev, base_url: OPENROUTER_BASE_URL };
-      }
-      return prev;
-    });
+    if (next === "openrouter") {
+      setOrForm((prev) => {
+        const current = (prev.base_url || "").trim();
+        if (!current || current === OPENROUTER_BASE_URL) {
+          return { ...prev, base_url: OPENROUTER_BASE_URL };
+        }
+        return prev;
+      });
+    }
+    if (next === "cursor") {
+      setCursorForm((prev) => {
+        const current = (prev.adapter_base_url || "").trim();
+        if (!current || current === CURSOR_ADAPTER_BASE_URL) {
+          return { ...prev, adapter_base_url: CURSOR_ADAPTER_BASE_URL };
+        }
+        return prev;
+      });
+    }
   }
 
   async function handleSaveDatabase(event) {
@@ -495,6 +640,31 @@ export default function SettingsPage() {
     setError(null);
     setStatus(null);
     try {
+      if (provider === "cursor" && cursorInstall && !cursorInstall.installed) {
+        setError(t("settings.cursorNotInstalled"));
+        return;
+      }
+      if (provider === "cursor") {
+        const payload = {
+          adapter_base_url: (cursorForm.adapter_base_url || "").trim(),
+          app_name: cursorForm.app_name,
+          default_model: cursorForm.default_model,
+          agents: cursorForm.agents,
+        };
+        if (cursorForm.token?.trim()) {
+          payload.token = cursorForm.token.trim();
+        }
+        const data = await saveCursorSettings(payload);
+        const providerData = await saveProvider("cursor");
+        setProvider(providerData.provider || "cursor");
+        setCursorForm({ ...EMPTY_CURSOR, ...data.cursor, token: "" });
+        setStatus(t("settings.llmSaved"));
+        checkConnection({ silent: true });
+        if (data.cursor?.token_configured) {
+          await refreshModels({ tokenConfigured: true });
+        }
+        return;
+      }
       const payload = {
         base_url: (orForm.base_url || "").trim(),
         app_name: orForm.app_name,
@@ -518,8 +688,10 @@ export default function SettingsPage() {
     }
   }
 
-  async function refreshModels({ tokenConfigured = orForm.token_configured } = {}) {
-    if (!tokenConfigured && !(orForm.token || "").trim()) {
+  async function refreshModels({
+    tokenConfigured = activeTokenConfigured,
+  } = {}) {
+    if (!tokenConfigured && !(activeLlmForm.token || "").trim()) {
       setModels([]);
       setModelsError(null);
       setModelsLoading(false);
@@ -528,7 +700,9 @@ export default function SettingsPage() {
     setModelsLoading(true);
     setModelsError(null);
     try {
-      const data = await fetchOpenRouterModels({ force: true, silent: true });
+      const data = isCursor
+        ? await fetchCursorModels({ force: true, silent: true })
+        : await fetchOpenRouterModels({ force: true, silent: true });
       setModels(data.models || []);
     } catch (err) {
       setModelsError(
@@ -547,17 +721,20 @@ export default function SettingsPage() {
     return <p className="text-sm text-muted">{t("settings.loading")}</p>;
   }
 
+  const agentSource = isCursor ? cursorForm.agents : orForm.agents;
   const agentIds = sortStrings(
-    Object.keys(orForm.agents || {}).length
-      ? Object.keys(orForm.agents)
+    Object.keys(agentSource || {}).length
+      ? Object.keys(agentSource)
       : Object.keys(agentNameById),
     locale,
   ).sort((a, b) => compareAz(agentLabel(a), agentLabel(b), locale));
 
   const modelPlaceholder =
-    provider === "openai_compatible"
-      ? t("settings.modelsSearch")
-      : t("settings.modelsSearchOpenRouter");
+    provider === "cursor"
+      ? t("settings.modelsSearchCursor")
+      : provider === "openai_compatible"
+        ? t("settings.modelsSearch")
+        : t("settings.modelsSearchOpenRouter");
 
   function sectionErrorMessage(failure) {
     const message =
@@ -629,13 +806,29 @@ export default function SettingsPage() {
               type="button"
               icon={RefreshCw}
               onClick={() => refreshModels()}
-              disabled={modelsLoading || !orForm.token_configured}
+              disabled={modelsLoading || !activeTokenConfigured}
               className="rounded-lg border border-line bg-fog px-3 py-1.5 text-xs font-medium hover:bg-fog/80 disabled:opacity-50"
             >
               {t("settings.refreshModels")}
             </IconButton>
           </div>
-          <p className="text-sm text-muted">{t("settings.llmIntro")}</p>
+          <p className="text-sm text-muted">
+            {isCursor ? t("settings.llmIntroCursor") : t("settings.llmIntro")}
+          </p>
+
+          {isCursor && cursorInstall && !cursorInstall.installed ? (
+            <p className="rounded-xl border border-warn-border bg-warn-bg px-4 py-2 text-sm text-warn">
+              {t("settings.cursorNotInstalled")}{" "}
+              <a
+                href="https://cursor.com"
+                target="_blank"
+                rel="noreferrer"
+                className="font-semibold underline"
+              >
+                cursor.com
+              </a>
+            </p>
+          ) : null}
 
           <Field label={t("settings.api")} id="llm_api">
             <select
@@ -652,31 +845,50 @@ export default function SettingsPage() {
             </select>
           </Field>
 
-          <Field label={t("settings.baseUrl")} id="llm_base_url">
-            <input
-              id="llm_base_url"
-              value={orForm.base_url || ""}
-              onChange={(e) => updateOrField("base_url", e.target.value)}
-              className={inputClass}
-              placeholder={
-                provider === "openrouter"
-                  ? OPENROUTER_BASE_URL
-                  : t("settings.baseUrlPlaceholder")
-              }
-              spellCheck={false}
-            />
-          </Field>
+          {isCursor ? (
+            <Field label={t("settings.adapterBaseUrl")} id="llm_adapter_base_url">
+              <input
+                id="llm_adapter_base_url"
+                value={cursorForm.adapter_base_url || ""}
+                onChange={(e) =>
+                  updateCursorField("adapter_base_url", e.target.value)
+                }
+                className={inputClass}
+                placeholder={CURSOR_ADAPTER_BASE_URL}
+                spellCheck={false}
+              />
+            </Field>
+          ) : (
+            <Field label={t("settings.baseUrl")} id="llm_base_url">
+              <input
+                id="llm_base_url"
+                value={orForm.base_url || ""}
+                onChange={(e) => updateOrField("base_url", e.target.value)}
+                className={inputClass}
+                placeholder={
+                  provider === "openrouter"
+                    ? OPENROUTER_BASE_URL
+                    : t("settings.baseUrlPlaceholder")
+                }
+                spellCheck={false}
+              />
+            </Field>
+          )}
 
           <Field label={t("settings.apiKey")} id="llm_token">
             <input
               id="llm_token"
               type="password"
               autoComplete="off"
-              value={orForm.token || ""}
-              onChange={(e) => updateOrField("token", e.target.value)}
+              value={activeLlmForm.token || ""}
+              onChange={(e) =>
+                isCursor
+                  ? updateCursorField("token", e.target.value)
+                  : updateOrField("token", e.target.value)
+              }
               className={inputClass}
               placeholder={
-                orForm.token_configured
+                activeTokenConfigured
                   ? t("settings.apiKeySavedPlaceholder")
                   : t("settings.apiKeyPastePlaceholder")
               }
@@ -684,7 +896,7 @@ export default function SettingsPage() {
             />
           </Field>
           <p className="text-xs text-muted">
-            {orForm.token_configured
+            {activeTokenConfigured
               ? t("settings.apiKeySavedHint")
               : t("settings.apiKeyPasteHint")}
           </p>
@@ -701,8 +913,12 @@ export default function SettingsPage() {
             <Field label={t("settings.defaultModel")} id="default_model">
               <ModelCombobox
                 id="default_model"
-                value={orForm.default_model}
-                onChange={(v) => updateOrField("default_model", v)}
+                value={activeLlmForm.default_model}
+                onChange={(v) =>
+                  isCursor
+                    ? updateCursorField("default_model", v)
+                    : updateOrField("default_model", v)
+                }
                 models={models}
                 loading={modelsLoading}
                 placeholder={modelPlaceholder}
@@ -711,8 +927,12 @@ export default function SettingsPage() {
             <Field label={t("settings.appName")} id="app_name">
               <input
                 id="app_name"
-                value={orForm.app_name}
-                onChange={(e) => updateOrField("app_name", e.target.value)}
+                value={activeLlmForm.app_name}
+                onChange={(e) =>
+                  isCursor
+                    ? updateCursorField("app_name", e.target.value)
+                    : updateOrField("app_name", e.target.value)
+                }
                 className={inputClass}
               />
             </Field>
@@ -729,7 +949,9 @@ export default function SettingsPage() {
                 >
                   <ModelCombobox
                     id={`agent-${agentId}`}
-                    value={orForm.agents?.[agentId]?.model || "composer-2.5"}
+                    value={
+                      activeLlmForm.agents?.[agentId]?.model || "composer-2.5"
+                    }
                     onChange={(v) => updateAgentModel(agentId, v)}
                     models={models}
                     loading={modelsLoading}
@@ -775,7 +997,83 @@ export default function SettingsPage() {
           </Field>
 
           {dbForm.engine === "sqlite" ? (
-            <p className="text-sm text-muted">{t("settings.sqliteHint")}</p>
+            <div className="space-y-3">
+              <p className="text-sm text-muted">{t("settings.sqliteHint")}</p>
+              <div className="grid gap-3 sm:grid-cols-3">
+                {(sampleTiers.length
+                  ? sampleTiers
+                  : [
+                      { id: "small", label: "Small", size_label: "~1.2 MB", exists: false, filename: "helix-sample-small.sqlite" },
+                      { id: "medium", label: "Medium", size_label: "~2.8 MB", exists: false, filename: "helix-sample-medium.sqlite" },
+                      { id: "big", label: "Big", size_label: "~55 MB", exists: false, filename: "helix-sample-big.sqlite" },
+                    ]
+                ).map((tier) => {
+                  const active =
+                    (dbForm.name || "").toLowerCase() ===
+                    String(tier.filename || "").toLowerCase();
+                  const busy = tierBusy === tier.id;
+                  return (
+                    <div
+                      key={tier.id}
+                      className={[
+                        "rounded-xl border p-3",
+                        active
+                          ? "border-moss bg-moss/10"
+                          : "border-line bg-fog/40",
+                      ].join(" ")}
+                    >
+                      <p className="text-sm font-semibold text-ink">
+                        {t(`settings.tier.${tier.id}`)}
+                      </p>
+                      <p className="mt-1 text-xs text-muted">
+                        {tier.size_label}
+                        {tier.size_hint ? ` (${t("settings.tierApprox")})` : ""}
+                      </p>
+                      <p className="mt-0.5 truncate text-[11px] text-muted">
+                        {tier.filename}
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {!tier.exists ? (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => handleEnsureTier(tier.id)}
+                            className="rounded-lg border border-line bg-paper px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-fog disabled:opacity-60"
+                          >
+                            {busy
+                              ? t("settings.tierWorking")
+                              : t("settings.tierDownload")}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={busy || active}
+                            onClick={() => handleUseTier(tier)}
+                            className="rounded-lg bg-moss px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-moss-deep disabled:opacity-60"
+                          >
+                            {active
+                              ? t("settings.tierInUse")
+                              : busy
+                                ? t("settings.tierWorking")
+                                : t("settings.tierUse")}
+                          </button>
+                        )}
+                        {tier.exists && !active ? (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => handleEnsureTier(tier.id)}
+                            className="rounded-lg border border-line bg-paper px-2.5 py-1.5 text-xs font-medium text-muted hover:bg-fog disabled:opacity-60"
+                          >
+                            {t("settings.tierRedownload")}
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           ) : (
             <>
               <div className="grid gap-3 sm:grid-cols-2">

@@ -22,10 +22,13 @@ import PageHeader from "../components/PageHeader.jsx";
 import { useI18n } from "../context/I18nContext.jsx";
 import { failMessage } from "../i18n/apiErrors.js";
 import { formatDateTime, formatDurationSeconds } from "../i18n/format.js";
-import { hasPersianScript } from "../utils/textDirection.js";
 import { assetUrl } from "../utils/assetUrl.js";
-import html2canvas from "html2canvas";
-import { jsPDF } from "jspdf";
+import {
+  exportResultPdf,
+  resolveDir,
+  resultChartEntries,
+} from "../lib/exportResultPdf.js";
+import { loadPdfDesign, orderedGridColumns } from "../lib/pdfDesign.js";
 
 const DARK_CHART_DEFAULTS = {
   backgroundColor: "transparent",
@@ -50,241 +53,6 @@ function withDarkChartColors(option) {
         }
       : option.title,
   };
-}
-
-function escapeHtml(value) {
-  return String(value || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
-
-function resolveDir(language, text) {
-  if (language === "fa") return "rtl";
-  if (language === "en") return "ltr";
-  return hasPersianScript(text) ? "rtl" : "ltr";
-}
-
-async function loadLogoDataUrl(url) {
-  if (!url) return "";
-  try {
-    const response = await fetch(url);
-    if (!response.ok) return "";
-    const blob = await response.blob();
-    return await new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(typeof reader.result === "string" ? reader.result : "");
-      reader.onerror = () => resolve("");
-      reader.readAsDataURL(blob);
-    });
-  } catch {
-    return "";
-  }
-}
-
-async function exportResultPdf({
-  prompt,
-  chartInstance,
-  textReport,
-  grid,
-  showChart,
-  showText,
-  showGrid,
-  language,
-  labels,
-  logoUrl,
-  companyLogoUrl,
-  locale,
-}) {
-  let chartImg = "";
-  if (showChart && chartInstance) {
-    try {
-      chartImg = chartInstance.getDataURL({
-        type: "png",
-        pixelRatio: 2,
-        // Light branded background for readable charts on paper.
-        backgroundColor: "#fafcfb",
-      });
-    } catch {
-      chartImg = "";
-    }
-  }
-
-  const dir = resolveDir(language, textReport || prompt);
-  const lang = dir === "rtl" ? "fa" : "en";
-  const safeReport = escapeHtml(textReport);
-  const exportedAt = formatDateTime(new Date(), locale || "en");
-
-  const [logoDataUrl, companyLogoDataUrl] = await Promise.all([
-    loadLogoDataUrl(logoUrl),
-    loadLogoDataUrl(companyLogoUrl),
-  ]);
-  const safeLogoUrl = escapeHtml(logoDataUrl);
-  const safeCompanyLogoUrl = escapeHtml(companyLogoDataUrl);
-  const reportTitle = escapeHtml((prompt || "").trim() || labels.pdfHeading);
-
-  // Ensure Vazirmatn is loaded so html2canvas captures correct glyphs.
-  try {
-    const id = "helix-pdf-vazirmatn";
-    if (!document.getElementById(id)) {
-      const link = document.createElement("link");
-      link.id = id;
-      link.rel = "stylesheet";
-      link.href =
-        "https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600&display=swap";
-      document.head.appendChild(link);
-    }
-    await (document.fonts?.ready || Promise.resolve());
-    await new Promise((r) => setTimeout(r, 300));
-  } catch {
-    // Font load is best-effort; export still works with fallback fonts.
-  }
-
-  const element = document.createElement("div");
-  element.style.position = "absolute";
-  element.style.left = "-9999px";
-  element.style.top = "0";
-  element.style.width = "1123px"; // ~A4 landscape width at 96dpi
-  element.style.background = "#ffffff";
-  element.setAttribute("dir", dir);
-  element.setAttribute("lang", lang);
-  document.body.appendChild(element);
-
-  const S = {
-    root: `font-family:Vazirmatn,system-ui,sans-serif;color:#111;background:#fff;padding:16px;box-sizing:border-box;`,
-    header: `display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 14px 0;padding:14px 12px;border:1px solid #1e3a5f;background:transparent;direction:ltr;`,
-    headerSide: `flex:0 0 168px;display:flex;align-items:center;`,
-    headerCenter: `flex:1 1 auto;min-width:0;`,
-    logo: `height:56px;width:auto;max-width:160px;object-fit:contain;`,
-    title: `text-align:center;font-size:16px;font-weight:600;margin:0;color:#111;line-height:1.7;overflow:visible;white-space:normal;`,
-    chartWrap: `margin-bottom:14px;`,
-    chart: `max-width:100%;height:auto;border:1px solid #3d9b82;border-radius:14px;display:block;`,
-    article: `margin-bottom:14px;padding:14px 16px;border:2px solid #3d9b82;border-radius:14px;background:#f6fbf9;white-space:pre-wrap;line-height:1.6;font-size:14px;`,
-    table: `width:100%;border-collapse:collapse;margin-top:14px;font-size:13px;line-height:1.8;`,
-    th: `border:1px solid #1e3a5f;padding:14px 10px;text-align:center;vertical-align:middle;background:transparent;color:#111;font-weight:600;line-height:1.8;overflow:visible;`,
-    td: `border:1px solid #cfe6dd;padding:12px 10px;text-align:center;vertical-align:middle;line-height:1.8;`,
-    tdEven: `border:1px solid #cfe6dd;padding:12px 10px;text-align:center;vertical-align:middle;line-height:1.8;background:#eef7f4;`,
-  };
-
-  const logoImgInline = safeLogoUrl
-    ? `<img style="${S.logo}" src="${safeLogoUrl}" alt="${escapeHtml(labels.pdfLogoAlt)}" />`
-    : "";
-  const companyLogoImgInline = safeCompanyLogoUrl
-    ? `<img style="${S.logo}" src="${safeCompanyLogoUrl}" alt="${escapeHtml(labels.pdfCompanyLogoAlt)}" />`
-    : "";
-  const chartImgInline = chartImg
-    ? `<div style="${S.chartWrap}"><img style="${S.chart}" src="${chartImg}" alt="${escapeHtml(labels.pdfChartAlt)}" /></div>`
-    : "";
-  const articleInline = showText
-    ? `<div style="${S.article}" dir="${dir}">${safeReport}</div>`
-    : "";
-
-  let gridInline = "";
-  if (showGrid && grid?.columns?.length) {
-    const cols = grid.columns;
-    const rows = grid.rows || [];
-    const headerCells = cols.map((c) => `<th style="${S.th}">${escapeHtml(c)}</th>`).join("");
-    const bodyRows = rows
-      .map(
-        (row, i) =>
-          `<tr>${cols
-            .map((c) => `<td style="${i % 2 === 1 ? S.tdEven : S.td}">${escapeHtml(row?.[c])}</td>`)
-            .join("")}</tr>`,
-      )
-      .join("");
-    gridInline = `<table style="${S.table}"><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table>`;
-  }
-
-  element.innerHTML = `
-    <div style="${S.root}">
-      <div style="${S.header}">
-        <div style="${S.headerSide}justify-content:flex-start;">${logoImgInline}</div>
-        <div style="${S.headerCenter}"><h1 style="${S.title}" dir="${dir}">${reportTitle}</h1></div>
-        <div style="${S.headerSide}justify-content:flex-end;">${companyLogoImgInline}</div>
-      </div>
-      ${chartImgInline}
-      ${articleInline}
-      ${gridInline}
-    </div>
-  `;
-
-  try {
-    // Give browser one frame to paint the element before capturing.
-    await new Promise((r) => requestAnimationFrame(r));
-    await new Promise((r) => requestAnimationFrame(r));
-
-    const canvas = await html2canvas(element, {
-      scale: 2,
-      useCORS: true,
-      backgroundColor: "#ffffff",
-      logging: false,
-    });
-
-    // A4 landscape dimensions in mm
-    const A4_W = 297;
-    const A4_H = 210;
-    const MARGIN = 12; // mm on all sides
-    const FOOTER_H = 10; // mm reserved for footer bar
-
-    const contentW = A4_W - MARGIN * 2;
-    const contentH = A4_H - MARGIN - FOOTER_H - MARGIN; // top + bottom + footer
-
-    const imgW = canvas.width;
-    const imgH = canvas.height;
-
-    // Scale factor: fit canvas width to content width
-    const mmPerPx = contentW / (imgW / 2); // /2 because scale:2
-    const totalImgH_mm = (imgH / 2) * mmPerPx;
-
-    const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "landscape" });
-
-    let yRemaining = totalImgH_mm;
-    let srcY = 0; // in canvas px
-    let pageNum = 0;
-
-    // Pre-calculate total pages
-    const totalPages = Math.ceil(totalImgH_mm / contentH);
-
-    while (yRemaining > 0) {
-      if (pageNum > 0) pdf.addPage();
-      pageNum++;
-
-      const sliceH_mm = Math.min(yRemaining, contentH);
-      const sliceH_px = Math.round((sliceH_mm / mmPerPx) * 2); // back to canvas px
-
-      // Slice the canvas into a temporary canvas for this page
-      const sliceCanvas = document.createElement("canvas");
-      sliceCanvas.width = imgW;
-      sliceCanvas.height = sliceH_px;
-      const ctx = sliceCanvas.getContext("2d");
-      ctx.drawImage(canvas, 0, srcY, imgW, sliceH_px, 0, 0, imgW, sliceH_px);
-
-      const sliceDataUrl = sliceCanvas.toDataURL("image/jpeg", 0.95);
-      pdf.addImage(sliceDataUrl, "JPEG", MARGIN, MARGIN, contentW, sliceH_mm);
-
-      const barY = A4_H - FOOTER_H;
-      const textY = barY + 6.5;
-      pdf.setDrawColor(30, 58, 95);
-      pdf.setLineWidth(0.3);
-      pdf.line(MARGIN, barY, A4_W - MARGIN, barY);
-      pdf.setTextColor(17, 17, 17);
-      pdf.setFontSize(9);
-      pdf.text(exportedAt, MARGIN, textY, { align: "left" });
-      pdf.text(labels.pdfFooter, A4_W / 2, textY, { align: "center" });
-      pdf.text(`${pageNum}/${totalPages}`, A4_W - MARGIN, textY, { align: "right" });
-
-      srcY += sliceH_px;
-      yRemaining -= sliceH_mm;
-    }
-
-    const blobUrl = pdf.output("bloburl");
-    window.open(blobUrl, "_blank");
-  } catch (err) {
-    console.error("PDF export failed:", err);
-    window.alert(labels.pdfAlert);
-  } finally {
-    element.remove();
-  }
 }
 
 function normalizeMode(mode) {
@@ -315,7 +83,7 @@ function ResultsList() {
 
   async function load() {
     const data = await fetchResults();
-    setItems(data);
+    setItems(data || []);
   }
 
   useEffect(() => {
@@ -339,12 +107,13 @@ function ResultsList() {
         setError(t("results.noPayload"));
         return;
       }
-      const showChart = Boolean(result.echarts_option);
+      const charts = resultChartEntries(result);
+      const showChart = charts.length > 0;
       const showText = Boolean(result.text_report);
       const showGrid = Boolean(result.grid?.columns?.length);
       await exportResultPdf({
         prompt: record.prompt || "",
-        chartInstance: null,
+        chartImages: [],
         textReport: result.text_report || "",
         grid: result.grid,
         showChart,
@@ -355,6 +124,7 @@ function ResultsList() {
         logoUrl: assetUrl("helix-logo.png"),
         companyLogoUrl: assetUrl("company-logo.png"),
         locale,
+        design: loadPdfDesign(),
       });
     } catch (err) {
       setError(failMessage(err, t, "results.exportFailed"));
@@ -473,7 +243,7 @@ function ResultsList() {
 }
 
 function ResultDetail({ resultId }) {
-  const chartRef = useRef(null);
+  const chartRefs = useRef([]);
   const { t, locale } = useI18n();
   const [record, setRecord] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -526,12 +296,13 @@ function ResultDetail({ resultId }) {
   const language = result?.language || record?.language || "en";
 
   const effectiveMode = normalizeMode(result?.mode || mode);
+  const chartEntries = useMemo(() => resultChartEntries(result), [result]);
   const showChart =
     Boolean(result) &&
     (effectiveMode === "chart" ||
       effectiveMode === "analytical_report_chart" ||
       effectiveMode === "auto") &&
-    Boolean(result.echarts_option);
+    chartEntries.length > 0;
   const showText =
     Boolean(result) &&
     (effectiveMode === "analytical_report" ||
@@ -543,13 +314,15 @@ function ResultDetail({ resultId }) {
     effectiveMode === "grid" &&
     Boolean(result.grid?.columns?.length);
 
-  const chartOption = useMemo(
-    () => (showChart ? withDarkChartColors(result.echarts_option) : null),
-    [showChart, result],
-  );
-
   const reportDir = resolveDir(language, editedReport || result?.text_report);
   const reportLang = reportDir === "rtl" ? "fa" : "en";
+  const gridColumns = useMemo(
+    () =>
+      showGrid
+        ? orderedGridColumns(result.grid.columns, language === "fa" ? "fa" : "en")
+        : [],
+    [showGrid, result, language],
+  );
 
   if (loading) {
     return <p className="text-sm text-muted">{t("results.loadingDetail")}</p>;
@@ -584,89 +357,103 @@ function ResultDetail({ resultId }) {
         backTo="/results"
         actions={
           <>
-          {showText ? (
-            <IconButton
-              type="button"
-              icon={Pencil}
-              onClick={() => setEditing((v) => !v)}
-              className="rounded-xl border border-line bg-paper px-4 py-2 text-sm font-medium text-ink hover:bg-fog"
+            {showText ? (
+              <IconButton
+                type="button"
+                icon={Pencil}
+                onClick={() => setEditing((v) => !v)}
+                className="rounded-xl border border-line bg-paper px-4 py-2 text-sm font-medium text-ink hover:bg-fog"
+              >
+                {editing ? t("results.done") : t("results.edit")}
+              </IconButton>
+            ) : null}
+            {showChart || showText || showGrid ? (
+              <IconButton
+                type="button"
+                icon={FileDown}
+                onClick={async () => {
+                  const instances = (chartRefs.current || [])
+                    .map((ref) => ref?.getEchartsInstance?.())
+                    .filter(Boolean);
+                  await exportResultPdf({
+                    prompt: editedPrompt,
+                    chartInstances: instances,
+                    textReport: editedReport,
+                    grid: result.grid,
+                    showChart,
+                    showText,
+                    showGrid,
+                    language,
+                    labels: pdfLabels,
+                    logoUrl: assetUrl("helix-logo.png"),
+                    companyLogoUrl: assetUrl("company-logo.png"),
+                    locale,
+                    design: loadPdfDesign(),
+                  });
+                }}
+                className="rounded-xl border border-line bg-paper px-4 py-2 text-sm font-medium text-ink hover:bg-fog"
+              >
+                {t("results.exportPdf")}
+              </IconButton>
+            ) : null}
+            <Link
+              to="/results"
+              className="inline-flex items-center gap-2 rounded-xl border border-line bg-paper px-4 py-2 text-sm font-medium text-ink hover:bg-fog"
             >
-              {editing ? t("results.done") : t("results.edit")}
-            </IconButton>
-          ) : null}
-          {showChart || showText || showGrid ? (
-            <IconButton
-              type="button"
-              icon={FileDown}
-              onClick={async () => {
-                await exportResultPdf({
-                  prompt: editedPrompt,
-                  chartInstance: chartRef.current?.getEchartsInstance?.(),
-                  textReport: editedReport,
-                  grid: result.grid,
-                  showChart,
-                  showText,
-                  showGrid,
-                  language,
-                  labels: pdfLabels,
-                  logoUrl: assetUrl("helix-logo.png"),
-                  companyLogoUrl: assetUrl("company-logo.png"),
-                  locale,
-                });
-              }}
-              className="rounded-xl border border-line bg-paper px-4 py-2 text-sm font-medium text-ink hover:bg-fog"
+              <History className="size-4 shrink-0" aria-hidden="true" />
+              {t("results.history")}
+            </Link>
+            <Link
+              to="/"
+              className="inline-flex items-center gap-2 rounded-xl border border-line bg-paper px-4 py-2 text-sm font-medium text-ink hover:bg-fog"
             >
-              {t("results.exportPdf")}
-            </IconButton>
-          ) : null}
-          <Link
-            to="/results"
-            className="inline-flex items-center gap-2 rounded-xl border border-line bg-paper px-4 py-2 text-sm font-medium text-ink hover:bg-fog"
-          >
-            <History className="size-4 shrink-0" aria-hidden="true" />
-            {t("results.history")}
-          </Link>
-          <Link
-            to="/"
-            className="inline-flex items-center gap-2 rounded-xl border border-line bg-paper px-4 py-2 text-sm font-medium text-ink hover:bg-fog"
-          >
-            <Plus className="size-4 shrink-0" aria-hidden="true" />
-            {t("results.newPrompt")}
-          </Link>
+              <Plus className="size-4 shrink-0" aria-hidden="true" />
+              {t("results.newPrompt")}
+            </Link>
           </>
         }
       >
-          {editing ? (
-            <textarea
-              value={editedPrompt}
-              onChange={(e) => setEditedPrompt(e.target.value)}
-              rows={2}
-              className="mt-1 w-full max-w-2xl resize-y rounded-xl border border-line bg-paper px-3 py-2 text-sm text-ink outline-none focus:border-moss focus:ring-2 focus:ring-moss/30"
-            />
-          ) : (
-            <p className="mt-0.5 max-w-2xl text-sm text-muted line-clamp-2">
-              {editedPrompt}
-            </p>
-          )}
+        {editing ? (
+          <textarea
+            value={editedPrompt}
+            onChange={(e) => setEditedPrompt(e.target.value)}
+            rows={2}
+            className="mt-1 w-full max-w-2xl resize-y rounded-xl border border-line bg-paper px-3 py-2 text-sm text-ink outline-none focus:border-moss focus:ring-2 focus:ring-moss/30"
+          />
+        ) : (
+          <p className="mt-0.5 max-w-2xl text-sm text-muted line-clamp-2">
+            {editedPrompt}
+          </p>
+        )}
       </PageHeader>
 
       <section className="space-y-3" aria-live="polite">
-        {showChart ? (
-          <div className="overflow-hidden rounded-2xl border border-line bg-paper/80 p-3 sm:p-4">
-            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted">
-              {t("results.sectionChart")}
-            </h2>
-            <div dir="ltr">
-              <ReactECharts
-                ref={chartRef}
-                option={chartOption}
-                style={{ height: 360, width: "100%" }}
-                notMerge
-                lazyUpdate
-              />
-            </div>
-          </div>
-        ) : null}
+        {showChart
+          ? chartEntries.map((entry, index) => (
+              <div
+                key={`${entry.chart_type}-${index}`}
+                className="overflow-hidden rounded-2xl border border-line bg-paper/80 p-3 sm:p-4"
+              >
+                <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted">
+                  {t("results.sectionChart")}
+                  {chartEntries.length > 1
+                    ? ` · ${entry.chart_type}`
+                    : ""}
+                </h2>
+                <div dir="ltr">
+                  <ReactECharts
+                    ref={(el) => {
+                      chartRefs.current[index] = el;
+                    }}
+                    option={withDarkChartColors(entry.option)}
+                    style={{ height: 360, width: "100%" }}
+                    notMerge
+                    lazyUpdate
+                  />
+                </div>
+              </div>
+            ))
+          : null}
 
         {showText ? (
           <article
@@ -704,7 +491,7 @@ function ResultDetail({ resultId }) {
             <table className="w-full min-w-[20rem] border-collapse font-sans text-sm">
               <thead>
                 <tr>
-                  {result.grid.columns.map((col) => (
+                  {gridColumns.map((col) => (
                     <th
                       key={col}
                       className="border border-line bg-fog/50 px-3 py-2 text-start font-semibold text-ink"
@@ -717,7 +504,7 @@ function ResultDetail({ resultId }) {
               <tbody>
                 {(result.grid.rows || []).map((row, idx) => (
                   <tr key={idx}>
-                    {result.grid.columns.map((col) => (
+                    {gridColumns.map((col) => (
                       <td
                         key={col}
                         className="border border-line px-3 py-1.5 text-ink"
