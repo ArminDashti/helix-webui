@@ -1,5 +1,6 @@
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
+import { fetchBranding } from "../api/client.js";
 import { formatDateTime } from "../i18n/format.js";
 import { hasPersianScript } from "../utils/textDirection.js";
 import { DEFAULT_PDF_DESIGN, loadPdfDesign, orderedGridColumns } from "./pdfDesign.js";
@@ -19,6 +20,7 @@ export function resolveDir(language, text) {
 
 async function loadLogoDataUrl(url) {
   if (!url) return "";
+  if (String(url).startsWith("data:")) return String(url);
   try {
     const response = await fetch(url);
     if (!response.ok) return "";
@@ -33,6 +35,18 @@ async function loadLogoDataUrl(url) {
   } catch {
     return "";
   }
+}
+
+async function resolveCompanyLogoDataUrl(prefs, companyLogoUrl) {
+  if (prefs?.companyLogoDataUrl) return prefs.companyLogoDataUrl;
+  try {
+    const data = await fetchBranding();
+    const fromSettings = data?.branding?.company_logo_data_url;
+    if (fromSettings) return fromSettings;
+  } catch {
+    /* fall through */
+  }
+  return loadLogoDataUrl(companyLogoUrl);
 }
 
 async function ensurePdfFonts() {
@@ -229,9 +243,7 @@ export async function exportResultPdf({
   const exportedAt = formatDateTime(new Date(), locale || "en");
   const [logoDataUrl, companyLogoDataUrl] = await Promise.all([
     loadLogoDataUrl(logoUrl),
-    prefs.companyLogoDataUrl
-      ? Promise.resolve(prefs.companyLogoDataUrl)
-      : loadLogoDataUrl(companyLogoUrl),
+    resolveCompanyLogoDataUrl(prefs, companyLogoUrl),
   ]);
 
   await ensurePdfFonts();

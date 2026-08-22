@@ -27,12 +27,30 @@ export default function RunProgressModal({
   const listRef = useRef(null);
   const { t } = useI18n();
 
+  const list = Array.isArray(messages) ? messages : [];
+  const runningStep = [...list].reverse().find((m) => m?.status === "running");
+  const completedCount = list.filter(
+    (m) => m?.status === "done" || m?.status === "failed",
+  ).length;
+  const seenAgents = new Set(
+    list.map((m) => m?.agent_id).filter((id) => id && id !== "user"),
+  );
+  const progressTotal = Math.max(completedCount + (runningStep ? 1 : 0), seenAgents.size, 1);
+  const progressValue = Math.min(completedCount, progressTotal);
+  const progressPct = Math.round((progressValue / progressTotal) * 100);
+
   useEffect(() => {
     if (!open || !listRef.current) return;
     listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [open, messages]);
 
   if (!open) return null;
+
+  const workingLabel = runningStep
+    ? t("runProgress.workingAgent", {
+        name: agentLabel(runningStep.agent_id, nameById, t),
+      })
+    : t("runProgress.working");
 
   return (
     <div
@@ -49,34 +67,57 @@ export default function RunProgressModal({
           {prompt ? (
             <p className="mt-1 line-clamp-2 text-sm text-muted">{prompt}</p>
           ) : null}
+          {running ? (
+            <div
+              className="mt-3 h-1.5 overflow-hidden rounded-full bg-fog"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={progressTotal}
+              aria-valuenow={progressValue}
+              aria-label={workingLabel}
+            >
+              <div
+                className="h-full rounded-full bg-moss transition-[width] duration-300"
+                style={{ width: `${Math.max(progressPct, running ? 8 : 0)}%` }}
+              />
+            </div>
+          ) : null}
         </header>
 
         <ul
           ref={listRef}
           className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-3 text-sm"
         >
-          {messages.length === 0 && running ? (
+          {list.length === 0 && running ? (
             <li className="text-muted">{t("runProgress.connecting")}</li>
           ) : null}
-          {messages.map((m, i) => (
-            <li
-              key={`${m.agent_id}-${i}`}
-              className="rounded-lg border border-line/60 bg-fog/60 px-3 py-2 animate-[fadeIn_0.4s_ease]"
-            >
-              <span className="font-medium text-moss">
-                {agentLabel(m.agent_id, nameById, t)}
-              </span>
-              <p className="mt-0.5 text-ink/90">
-                {translateKnownMessage(t, m.message)}
-              </p>
-            </li>
-          ))}
+          {list.map((m, i) => {
+            const isRunning = m.status === "running";
+            return (
+              <li
+                key={`${m.agent_id}-${i}`}
+                className={[
+                  "rounded-lg border px-3 py-2 animate-[fadeIn_0.4s_ease]",
+                  isRunning
+                    ? "border-moss/50 bg-moss/10"
+                    : "border-line/60 bg-fog/60",
+                ].join(" ")}
+              >
+                <span className="font-medium text-moss">
+                  {agentLabel(m.agent_id, nameById, t)}
+                </span>
+                <p className="mt-0.5 text-ink/90">
+                  {translateKnownMessage(t, m.message)}
+                </p>
+              </li>
+            );
+          })}
         </ul>
 
         <footer className="flex shrink-0 items-center justify-between gap-2 border-t border-line/80 px-4 py-3">
           {running ? (
             <p className="text-xs font-medium text-moss animate-pulse">
-              {t("runProgress.working")}
+              {workingLabel}
             </p>
           ) : error ? (
             <p className="text-sm text-warn" role="status">

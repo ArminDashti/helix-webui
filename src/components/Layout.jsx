@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useApiStatus } from "../context/ApiStatusContext.jsx";
 import { useI18n } from "../context/I18nContext.jsx";
+import { fetchBranding } from "../api/client.js";
 import { assetUrl } from "../utils/assetUrl.js";
 import pkg from "../../package.json";
 
@@ -110,6 +111,10 @@ export default function Layout() {
   const { health, checking } = useApiStatus();
   const { t, locale, setLocale } = useI18n();
   const [theme, setTheme] = useState(readThemePreference);
+  const [branding, setBranding] = useState({
+    company_name: "",
+    company_logo_data_url: "",
+  });
 
   const mainLinks = [
     { to: "/", label: t("nav.analysis"), icon: BarChart3, end: true },
@@ -137,6 +142,31 @@ export default function Layout() {
       /* ignore */
     }
   }, [theme]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadBranding() {
+      try {
+        const data = await fetchBranding();
+        if (cancelled) return;
+        setBranding({
+          company_name: data?.branding?.company_name || "",
+          company_logo_data_url: data?.branding?.company_logo_data_url || "",
+        });
+      } catch {
+        if (!cancelled) {
+          setBranding({ company_name: "", company_logo_data_url: "" });
+        }
+      }
+    }
+    loadBranding();
+    const onChanged = () => loadBranding();
+    window.addEventListener("helix-branding-changed", onChanged);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("helix-branding-changed", onChanged);
+    };
+  }, []);
 
   useEffect(() => {
     if (theme !== "system") return undefined;
@@ -170,12 +200,32 @@ export default function Layout() {
               height={48}
             />
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="truncate font-display text-sm font-semibold tracking-wide text-ink">
               {t("layout.brand")}
             </p>
             <p className="truncate text-[11px] text-muted">{t("layout.tagline")}</p>
           </div>
+          {branding.company_logo_data_url || branding.company_name ? (
+            <div className="flex min-w-0 max-w-[45%] shrink-0 flex-col items-end gap-0.5 border-s border-line/60 ps-2">
+              {branding.company_logo_data_url ? (
+                <img
+                  src={branding.company_logo_data_url}
+                  alt={
+                    branding.company_name || t("layout.companyLogoAlt")
+                  }
+                  title={t("layout.companyLogoTitle")}
+                  aria-label={t("layout.companyLogoAria")}
+                  className="h-8 w-auto max-w-[4.5rem] object-contain"
+                />
+              ) : null}
+              {branding.company_name ? (
+                <p className="w-full truncate text-end text-[10px] font-medium text-ink/80">
+                  {branding.company_name}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         {mainLinks.map((link) => (

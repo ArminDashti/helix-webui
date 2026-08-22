@@ -3,6 +3,7 @@ import { FileDown, LayoutTemplate } from "lucide-react";
 import PageHeader from "../components/PageHeader.jsx";
 import IconButton from "../components/IconButton.jsx";
 import { useI18n } from "../context/I18nContext.jsx";
+import { fetchBranding } from "../api/client.js";
 import { assetUrl } from "../utils/assetUrl.js";
 import { buildPdfHtml, exportResultPdf } from "../lib/exportResultPdf.js";
 import {
@@ -90,6 +91,15 @@ export default function CanvasPage() {
         .catch(() => "");
 
       let companyLogoDataUrl = design.companyLogoDataUrl || "";
+      if (!companyLogoDataUrl) {
+        try {
+          const branding = await fetchBranding();
+          companyLogoDataUrl =
+            branding?.branding?.company_logo_data_url || "";
+        } catch {
+          companyLogoDataUrl = "";
+        }
+      }
       if (!companyLogoDataUrl) {
         companyLogoDataUrl = await fetch(assetUrl("company-logo.png"))
           .then((r) => (r.ok ? r.blob() : null))

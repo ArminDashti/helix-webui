@@ -66,7 +66,6 @@ export default function AboutMePage() {
         <div className="space-y-4 text-[15px] leading-relaxed text-ink">
           <p>{t("aboutMe.p1")}</p>
           <p>{t("aboutMe.p2")}</p>
-          <p>{t("aboutMe.p3")}</p>
         </div>
       </div>
 

@@ -10,6 +10,7 @@ import PageHeader from "../components/PageHeader.jsx";
 import { useI18n } from "../context/I18nContext.jsx";
 import { failMessage } from "../i18n/apiErrors.js";
 import { compareAz, sortStrings } from "../utils/sortOptions.js";
+import { preferIdOrderColumn } from "../utils/preferIdOrderColumn.js";
 
 const LIMITS = [16, 32, 64, 128];
 
@@ -60,7 +61,7 @@ export default function DbExplorerPage() {
           compareAz(a.name, b.name, locale),
         );
         setColumns(cols);
-        setOrderBy((prev) => prev || cols[0]?.name || "");
+        setOrderBy(preferIdOrderColumn(data.columns || cols) || cols[0]?.name || "");
       } catch {
         if (!cancelled) setColumns([]);
       }

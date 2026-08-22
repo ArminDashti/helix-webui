@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
 import {
   Activity,
+  Building2,
   Database,
   RefreshCw,
   Save,
@@ -9,6 +10,7 @@ import {
 } from "lucide-react";
 import {
   fetchAgents,
+  fetchBranding,
   fetchCursorInstallStatus,
   fetchCursorModels,
   fetchCursorSettings,
@@ -18,6 +20,7 @@ import {
   fetchProviderSettings,
   fetchSampleTiers,
   ensureSampleTier,
+  saveBranding,
   saveCursorSettings,
   saveDatabaseSettings,
   saveOpenRouterSettings,
@@ -72,8 +75,12 @@ const EMPTY_CURSOR = {
   token_configured: false,
 };
 
+const EMPTY_BRANDING = {
+  company_name: "",
+  company_logo_data_url: "",
+};
+
 const TAB_ALIASES = {
-  general: "llm",
   provider: "llm",
   openrouter: "llm",
   cursor: "llm",
@@ -103,6 +110,7 @@ function isSampleDbName(name) {
 }
 
 function tabIcon(tabId) {
+  if (tabId === "general") return Building2;
   if (tabId === "database") return Database;
   if (tabId === "status") return Activity;
   return SettingsIcon;
@@ -252,6 +260,7 @@ export default function SettingsPage() {
 
   const tabs = useMemo(
     () => [
+      { id: "general", label: t("settings.tabGeneral") },
       { id: "llm", label: t("settings.tabLlm") },
       { id: "database", label: t("settings.tabDatabase") },
       { id: "status", label: t("settings.tabStatus") },
@@ -261,7 +270,7 @@ export default function SettingsPage() {
 
   const activeSection = tabs.some((tab) => tab.id === requestedTab)
     ? requestedTab
-    : "llm";
+    : "general";
 
   const dbEngines = useMemo(
     () =>
@@ -294,6 +303,8 @@ export default function SettingsPage() {
   const [dbForm, setDbForm] = useState(EMPTY_DB);
   const [connectionString, setConnectionString] = useState("");
   const [connectionStringDirty, setConnectionStringDirty] = useState(false);
+  const [brandingForm, setBrandingForm] = useState(EMPTY_BRANDING);
+  const [logoError, setLogoError] = useState(null);
   const [provider, setProvider] = useState("openrouter");
   const [orForm, setOrForm] = useState(EMPTY_OPENROUTER);
   const [cursorForm, setCursorForm] = useState(EMPTY_CURSOR);
@@ -368,7 +379,7 @@ export default function SettingsPage() {
   }
 
   function setActiveSection(id) {
-    setSearchParams(id === "llm" ? {} : { tab: id }, { replace: true });
+    setSearchParams(id === "general" ? {} : { tab: id }, { replace: true });
   }
 
   useEffect(() => {
@@ -387,6 +398,20 @@ export default function SettingsPage() {
         } catch (err) {
           failures.push({
             key: "settings.sectionAgentsFail",
+            message: err instanceof Error ? err.message : "",
+          });
+        }
+
+        try {
+          const brandingData = await fetchBranding();
+          setBrandingForm({
+            ...EMPTY_BRANDING,
+            ...(brandingData.branding || {}),
+          });
+          anyOk = true;
+        } catch (err) {
+          failures.push({
+            key: "settings.sectionBrandingFail",
             message: err instanceof Error ? err.message : "",
           });
         }
@@ -599,6 +624,53 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleSaveGeneral(event) {
+    event.preventDefault();
+    setError(null);
+    setLogoError(null);
+    setStatus(null);
+    try {
+      const data = await saveBranding({
+        company_name: brandingForm.company_name || "",
+        company_logo_data_url: brandingForm.company_logo_data_url || "",
+      });
+      setBrandingForm({ ...EMPTY_BRANDING, ...(data.branding || {}) });
+      setStatus(t("settings.savedGeneral"));
+      window.dispatchEvent(new CustomEvent("helix-branding-changed"));
+    } catch (err) {
+      setError(failMessage(err, t, "common.saveFailed"));
+    }
+  }
+
+  function handleCompanyLogoFile(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    setLogoError(null);
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setLogoError(t("settings.companyLogoInvalid"));
+      return;
+    }
+    if (file.size > 250_000) {
+      setLogoError(t("settings.companyLogoTooLarge"));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const dataUrl = typeof reader.result === "string" ? reader.result : "";
+      if (!dataUrl) {
+        setLogoError(t("settings.companyLogoInvalid"));
+        return;
+      }
+      setBrandingForm((prev) => ({
+        ...prev,
+        company_logo_data_url: dataUrl,
+      }));
+    };
+    reader.onerror = () => setLogoError(t("settings.companyLogoInvalid"));
+    reader.readAsDataURL(file);
+  }
+
   async function handleSaveDatabase(event) {
     event.preventDefault();
     setError(null);
@@ -790,6 +862,79 @@ export default function SettingsPage() {
           </div>
         ) : null}
         <FlashMessage message={status} />
+
+      {activeSection === "general" ? (
+        <form
+          onSubmit={handleSaveGeneral}
+          className="space-y-3 rounded-2xl border border-line/80 bg-paper/80 p-4 backdrop-blur-sm"
+        >
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
+            {t("settings.tabGeneral")}
+          </h2>
+          <p className="text-sm text-muted">{t("settings.generalIntro")}</p>
+          <Field label={t("settings.companyName")} id="company_name">
+            <input
+              id="company_name"
+              value={brandingForm.company_name || ""}
+              onChange={(e) =>
+                setBrandingForm((prev) => ({
+                  ...prev,
+                  company_name: e.target.value,
+                }))
+              }
+              className={inputClass}
+              placeholder={t("settings.companyNamePlaceholder")}
+            />
+          </Field>
+          <Field label={t("settings.companyLogo")} id="company_logo">
+            <div className="space-y-2">
+              {brandingForm.company_logo_data_url ? (
+                <div className="flex items-center gap-3">
+                  <img
+                    src={brandingForm.company_logo_data_url}
+                    alt={t("layout.companyLogoAlt")}
+                    className="h-14 w-auto max-w-[8rem] rounded-lg border border-line/80 object-contain bg-fog/40 p-1"
+                  />
+                  <IconButton
+                    type="button"
+                    onClick={() =>
+                      setBrandingForm((prev) => ({
+                        ...prev,
+                        company_logo_data_url: "",
+                      }))
+                    }
+                    className="rounded-lg border border-line bg-fog px-3 py-1.5 text-xs font-medium hover:bg-fog/80"
+                  >
+                    {t("settings.companyLogoClear")}
+                  </IconButton>
+                </div>
+              ) : null}
+              <input
+                id="company_logo"
+                type="file"
+                accept="image/*"
+                onChange={handleCompanyLogoFile}
+                className="block w-full text-sm text-ink file:me-3 file:rounded-lg file:border-0 file:bg-fog file:px-3 file:py-1.5 file:text-sm file:font-medium"
+              />
+              <p className="text-xs text-muted">{t("settings.companyLogoHint")}</p>
+              {logoError ? (
+                <p className="text-sm text-warn" role="alert">
+                  {logoError}
+                </p>
+              ) : null}
+            </div>
+          </Field>
+          <div className="flex justify-end pt-1">
+            <IconButton
+              type="submit"
+              icon={Save}
+              className="rounded-xl bg-moss px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+            >
+              {t("common.save")}
+            </IconButton>
+          </div>
+        </form>
+      ) : null}
 
       {activeSection === "status" ? <StatusLogsSection /> : null}
 

@@ -366,6 +366,18 @@ export async function saveProvider(provider) {
   });
 }
 
+export async function fetchBranding() {
+  return requestJson("/api/admin/branding/");
+}
+
+export async function saveBranding(payload) {
+  return requestJson("/api/admin/branding/", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ branding: payload }),
+  });
+}
+
 export async function fetchUsers() {
   const data = await requestJson("/api/admin/users/");
   return data.users;

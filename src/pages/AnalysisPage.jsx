@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BarChart3, Play } from "lucide-react";
-import { fetchAgents, runChat, createResult } from "../api/client.js";
+import { fetchAgents, streamRun, createResult } from "../api/client.js";
 import ErrorModal from "../components/ErrorModal.jsx";
 import IconButton from "../components/IconButton.jsx";
 import PageHeader from "../components/PageHeader.jsx";
@@ -61,6 +61,7 @@ export default function AnalysisPage() {
   const [running, setRunning] = useState(false);
   const [runError, setRunError] = useState(null);
   const [activePrompt, setActivePrompt] = useState("");
+  const [runMessages, setRunMessages] = useState([]);
   const [nameById, setNameById] = useState({});
   const [llmError, setLlmError] = useState(null);
   const abortRef = useRef(null);
@@ -150,6 +151,7 @@ export default function AnalysisPage() {
     setError(null);
     setLlmError(null);
     setRunError(null);
+    setRunMessages([]);
     setActivePrompt(trimmed);
     setModalOpen(true);
     setRunning(true);
@@ -178,7 +180,21 @@ export default function AnalysisPage() {
 
     try {
       const startedAt = performance.now();
-      const final = await runChat(payload, controller.signal);
+      const final = await streamRun(payload, (event) => {
+        if (event?.event === "step") {
+          setRunMessages((prev) => [
+            ...prev,
+            {
+              agent_id: event.agent_id,
+              node_id: event.node_id,
+              message: event.message,
+              status: event.status,
+            },
+          ]);
+        } else if (event?.event === "error" && event.error) {
+          setRunError(translateKnownMessage(t, String(event.error)));
+        }
+      }, controller.signal);
       const clientDurationS = (performance.now() - startedAt) / 1000;
       const durationS =
         typeof final?.duration_s === "number" && Number.isFinite(final.duration_s)
@@ -373,7 +389,7 @@ export default function AnalysisPage() {
       <RunProgressModal
         open={modalOpen}
         prompt={activePrompt}
-        messages={[]}
+        messages={runMessages}
         running={running}
         error={runError}
         onDismiss={dismissModal}
